@@ -3,11 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
 import { Worker, AttendanceSession, AttendanceRecord } from '../types';
+import { supabase } from '../lib/supabaseClient';
 
 interface AttendanceProps {
   workers: Worker[];
-  attendanceHistory: AttendanceSession[];
-  setAttendanceHistory: React.Dispatch<React.SetStateAction<AttendanceSession[]>>;
+  refreshData: () => void;
   activeSession: Omit<AttendanceSession, 'records' | 'date' | 'id'> | null;
   setActiveSession: React.Dispatch<React.SetStateAction<Omit<AttendanceSession, 'records' | 'date' | 'id'> | null>>;
   activeRecords: AttendanceRecord[];
@@ -25,7 +25,7 @@ const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['d
 
 const Attendance: React.FC<AttendanceProps> = ({ 
   workers, 
-  setAttendanceHistory,
+  refreshData,
   activeSession,
   setActiveSession,
   activeRecords,
@@ -34,6 +34,7 @@ const Attendance: React.FC<AttendanceProps> = ({
   const [isModalOpen, setIsModalOpen] = useState(!activeSession);
   const [opsIdInput, setOpsIdInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isEndingSession, setIsEndingSession] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -95,6 +96,12 @@ const Attendance: React.FC<AttendanceProps> = ({
           return;
       }
 
+      if (!worker.id) {
+        setError(`Critical error: Worker ${worker.fullName} does not have a database ID.`);
+        setOpsIdInput('');
+        return;
+      }
+
       const newRecord: AttendanceRecord = {
           workerId: worker.id,
           opsId: worker.opsId,
@@ -107,19 +114,52 @@ const Attendance: React.FC<AttendanceProps> = ({
       setOpsIdInput('');
   };
 
-  const handleEndSession = () => {
-    if(activeSession && activeRecords.length > 0) {
-        const newSession: AttendanceSession = {
-            id: uuidv4(),
-            ...activeSession,
-            date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
-            records: activeRecords
-        };
-        setAttendanceHistory(prev => [...prev, newSession]);
+  const handleEndSession = async () => {
+    if(!activeSession) return;
+    setIsEndingSession(true);
+
+    try {
+        if(activeRecords.length > 0) {
+            // 1. Insert the session
+            const newSessionId = uuidv4();
+            const { error: sessionError } = await supabase
+                .from('attendance_sessions')
+                .insert({
+                    id: newSessionId,
+                    date: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+                    division: activeSession.division,
+                    shiftTime: activeSession.shiftTime,
+                    shiftId: activeSession.shiftId,
+                    planMpp: activeSession.planMpp
+                });
+            
+            if (sessionError) throw sessionError;
+
+            // 2. Prepare and insert all records
+            const recordsToInsert = activeRecords.map(rec => ({
+                session_id: newSessionId,
+                worker_id: rec.workerId,
+                timestamp: rec.timestamp
+            }));
+
+            const { error: recordsError } = await supabase
+                .from('attendance_records')
+                .insert(recordsToInsert);
+
+            if (recordsError) throw recordsError;
+        }
+
+        // 3. Reset state and refresh data
+        setActiveSession(null);
+        setActiveRecords([]);
+        setIsModalOpen(true);
+        refreshData();
+
+    } catch(err: any) {
+        setError(`Failed to save session: ${err.message}`);
+    } finally {
+        setIsEndingSession(false);
     }
-    setActiveSession(null);
-    setActiveRecords([]);
-    setIsModalOpen(true);
   }
 
   const getFulfillmentStatus = () => {
@@ -157,8 +197,8 @@ const Attendance: React.FC<AttendanceProps> = ({
                     <p className="text-gray-400">Status</p>
                     <p className={`text-3xl font-bold ${fulfillmentStatus.color}`}>{fulfillmentStatus.text}</p>
                 </div>
-                 <button onClick={handleEndSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                    End Session
+                 <button onClick={handleEndSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" disabled={isEndingSession}>
+                    {isEndingSession ? 'Saving...' : 'End Session'}
                 </button>
             </div>
 

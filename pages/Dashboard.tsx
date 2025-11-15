@@ -8,12 +8,13 @@ import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
 import EditIcon from '../components/icons/EditIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
+import { supabase } from '../lib/supabaseClient';
 
 
 interface DashboardProps {
     workers: Worker[];
     attendanceHistory: AttendanceSession[];
-    setAttendanceHistory: React.Dispatch<React.SetStateAction<AttendanceSession[]>>;
+    refreshData: () => void;
 }
 
 const StatCard: React.FC<{ title: string; value: string | number; description: string }> = ({ title, value, description }) => (
@@ -32,22 +33,25 @@ const SummaryItem: React.FC<{ label: string; value: number }> = ({ label, value 
 );
 
 
-const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAttendanceHistory }) => {
+const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData }) => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
     const [isViewModalOpen, setIsViewModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [loadingAction, setLoadingAction] = useState(false);
+
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
     const calculateFulfillment = (startDay: number, endDay: number) => {
         const today = new Date();
         const relevantSessions = attendanceHistory.filter(session => {
-            const sessionDate = new Date(session.date);
-            return sessionDate.getMonth() === today.getMonth() &&
-                   sessionDate.getFullYear() === today.getFullYear() &&
-                   sessionDate.getDate() >= startDay &&
-                   sessionDate.getDate() <= endDay;
+            const sessionDate = new Date(session.date + 'T00:00:00Z');
+            if (isNaN(sessionDate.getTime())) return false;
+            return sessionDate.getUTCMonth() === today.getUTCMonth() &&
+                   sessionDate.getUTCFullYear() === today.getUTCFullYear() &&
+                   sessionDate.getUTCDate() >= startDay &&
+                   sessionDate.getUTCDate() <= endDay;
         });
 
         if (relevantSessions.length === 0) return '0%';
@@ -91,25 +95,24 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
         }
     };
     
-    // --- Attendance Summary Calculation ---
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
-    const currentYear = today.getFullYear();
-    const currentMonth = today.getMonth();
+    const currentYear = today.getUTCFullYear();
+    const currentMonth = today.getUTCMonth();
 
     const startOfWeek = new Date(today);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); 
-    startOfWeek.setDate(diff);
+    const day = startOfWeek.getUTCDay();
+    const diff = startOfWeek.getUTCDate() - day + (day === 0 ? -6 : 1); 
+    startOfWeek.setUTCDate(diff);
 
     const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
 
     const counts = { today: 0, thisWeek: 0, thisMonth: 0, period1: 0, period2: 0 };
 
     attendanceHistory.forEach(session => {
-        const sessionDate = new Date(session.date + 'T00:00:00');
+        const sessionDate = new Date(session.date + 'T00:00:00Z');
         if (isNaN(sessionDate.getTime())) return;
 
         const attendanceCount = session.records.length;
@@ -118,12 +121,12 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
             counts.thisWeek += attendanceCount;
         }
 
-        if (sessionDate.getFullYear() === currentYear && sessionDate.getMonth() === currentMonth) {
+        if (sessionDate.getUTCFullYear() === currentYear && sessionDate.getUTCMonth() === currentMonth) {
             counts.thisMonth += attendanceCount;
             if (sessionDate.getTime() === today.getTime()) {
                 counts.today += attendanceCount;
             }
-            const dayOfMonth = sessionDate.getDate();
+            const dayOfMonth = sessionDate.getUTCDate();
             if (dayOfMonth >= 1 && dayOfMonth <= 15) {
                 counts.period1 += attendanceCount;
             } else if (dayOfMonth >= 16) {
@@ -136,14 +139,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     }).format(new Date());
 
-    // --- CRUD Handlers ---
     const openViewModal = (session: AttendanceSession) => {
         setSelectedSession(session);
         setIsViewModalOpen(true);
     };
 
     const openEditModal = (session: AttendanceSession) => {
-        setSelectedSession(session);
+        setSelectedSession(JSON.parse(JSON.stringify(session))); // Deep copy to avoid direct state mutation
         setIsEditModalOpen(true);
     };
 
@@ -152,22 +154,52 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
         setIsDeleteModalOpen(true);
     };
 
-    const handleRemoveRecord = (recordId: string) => {
+    const handleRemoveRecord = async (recordToRemove: AttendanceRecord) => {
         if (!selectedSession) return;
-        const updatedRecords = selectedSession.records.filter(r => r.workerId !== recordId);
-        const updatedSession = { ...selectedSession, records: updatedRecords };
-
-        const updatedHistory = attendanceHistory.map(h => h.id === selectedSession.id ? updatedSession : h);
-        setAttendanceHistory(updatedHistory);
-        setSelectedSession(updatedSession);
+        setLoadingAction(true);
+        const { error } = await supabase
+            .from('attendance_records')
+            .delete()
+            .match({ session_id: selectedSession.id, worker_id: recordToRemove.workerId });
+        
+        setLoadingAction(false);
+        if (error) {
+            alert(`Error removing record: ${error.message}`);
+        } else {
+            const updatedRecords = selectedSession.records.filter(r => r.workerId !== recordToRemove.workerId);
+            setSelectedSession({ ...selectedSession, records: updatedRecords });
+            refreshData(); // Refresh all data to ensure consistency
+        }
     };
 
-    const handleDeleteSession = () => {
+    const handleDeleteSession = async () => {
         if (!selectedSession) return;
-        const updatedHistory = attendanceHistory.filter(h => h.id !== selectedSession.id);
-        setAttendanceHistory(updatedHistory);
-        setIsDeleteModalOpen(false);
-        setSelectedSession(null);
+        setLoadingAction(true);
+        // First delete records, then the session
+        const { error: recordsError } = await supabase
+            .from('attendance_records')
+            .delete()
+            .match({ session_id: selectedSession.id });
+        
+        if (recordsError) {
+             setLoadingAction(false);
+             alert(`Error deleting records: ${recordsError.message}`);
+             return;
+        }
+
+        const { error: sessionError } = await supabase
+            .from('attendance_sessions')
+            .delete()
+            .match({ id: selectedSession.id });
+        
+        setLoadingAction(false);
+        if (sessionError) {
+            alert(`Error deleting session: ${sessionError.message}`);
+        } else {
+            setIsDeleteModalOpen(false);
+            setSelectedSession(null);
+            refreshData();
+        }
     };
 
 
@@ -223,7 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
                         </thead>
                         <tbody>
                             {attendanceHistory.length > 0 ? (
-                                [...attendanceHistory].reverse().map((session) => {
+                                [...attendanceHistory].map((session) => {
                                     const actual = session.records.length;
                                     const planned = session.planMpp;
                                     let status = 'GAP';
@@ -303,7 +335,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
                                         <td className="p-2">{record.opsId}</td>
                                         <td className="p-2">{record.fullName}</td>
                                         <td className="p-2 text-center">
-                                            <button onClick={() => handleRemoveRecord(record.workerId)} className="text-red-400 hover:text-red-300">
+                                            <button onClick={() => handleRemoveRecord(record)} className="text-red-400 hover:text-red-300" disabled={loadingAction}>
                                                 <DeleteIcon />
                                             </button>
                                         </td>
@@ -323,7 +355,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, setAt
                         <p className="text-sm text-red-400 mt-2">This will remove all {selectedSession.records.length} attendance records for this session. This action cannot be undone.</p>
                         <div className="flex justify-end gap-4 mt-6">
                             <button onClick={() => setIsDeleteModalOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                            <button onClick={handleDeleteSession} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Delete Session</button>
+                            <button onClick={handleDeleteSession} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
+                                {loadingAction ? 'Deleting...' : 'Delete Session'}
+                            </button>
                         </div>
                     </div>
                 )}

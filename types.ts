@@ -1,6 +1,5 @@
-
 export interface Worker {
-  id: string;
+  id?: string;
   opsId: string;
   fullName: string;
   nik: string;

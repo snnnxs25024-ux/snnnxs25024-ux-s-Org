@@ -1,6 +1,4 @@
 import React, { useState, useRef } from 'react';
-// @ts-ignore
-import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
 import { Worker } from '../types';
 import Modal from '../components/Modal';
@@ -10,19 +8,21 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import UploadIcon from '../components/icons/UploadIcon';
 import AddIcon from '../components/icons/AddIcon';
+import { supabase } from '../lib/supabaseClient';
 
 
 interface DatabaseProps {
   workers: Worker[];
-  setWorkers: React.Dispatch<React.SetStateAction<Worker[]>>;
+  refreshData: () => void;
 }
 
-const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
+const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
+  const [loadingAction, setLoadingAction] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const openViewModal = (worker: Worker) => {
@@ -40,10 +40,13 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
     setIsDeleteConfirmOpen(true);
   }
 
-  const handleSaveWorker = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveWorker = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setLoadingAction(true);
     const formData = new FormData(e.currentTarget);
-    const workerData: Omit<Worker, 'id' | 'createdAt'> & { id?: string } = {
+    
+    // Construct the base data object
+    const workerData = {
         opsId: formData.get('opsId') as string,
         fullName: formData.get('fullName') as string,
         nik: formData.get('nik') as string,
@@ -53,25 +56,47 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
         status: formData.get('status') as Worker['status'],
     };
 
+    let error;
+
     if (selectedWorker) { // Editing existing worker
-      setWorkers(workers.map(w => w.id === selectedWorker.id ? { ...selectedWorker, ...workerData } : w));
+      const { error: updateError } = await supabase
+        .from('workers')
+        .update(workerData)
+        .eq('id', selectedWorker.id);
+      error = updateError;
     } else { // Adding new worker
-      const newWorker: Worker = {
-          ...workerData,
-          id: uuidv4(),
-          createdAt: new Date().toISOString(),
-      };
-      setWorkers([...workers, newWorker]);
+      const { error: insertError } = await supabase
+        .from('workers')
+        .insert([{ ...workerData, createdAt: new Date().toISOString() }]);
+      error = insertError;
     }
-    setIsEditModalOpen(false);
-    setSelectedWorker(null);
+    
+    setLoadingAction(false);
+    if (error) {
+      alert(`Error saving worker: ${error.message}`);
+    } else {
+      setIsEditModalOpen(false);
+      setSelectedWorker(null);
+      refreshData();
+    }
   };
 
-  const handleDeleteWorker = () => {
-    if(workerToDelete){
-        setWorkers(workers.filter(w => w.id !== workerToDelete.id));
-        setIsDeleteConfirmOpen(false);
-        setWorkerToDelete(null);
+  const handleDeleteWorker = async () => {
+    if(workerToDelete && workerToDelete.id){
+        setLoadingAction(true);
+        const { error } = await supabase
+            .from('workers')
+            .delete()
+            .eq('id', workerToDelete.id);
+        
+        setLoadingAction(false);
+        if (error) {
+            alert(`Error deleting worker: ${error.message}`);
+        } else {
+            setIsDeleteConfirmOpen(false);
+            setWorkerToDelete(null);
+            refreshData();
+        }
     }
   }
   
@@ -105,7 +130,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
+        setLoadingAction(true);
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'binary' });
         const sheetName = workbook.SheetNames[0];
@@ -116,26 +142,19 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
         const statusValues: Worker['status'][] = ['Active', 'Non Active', 'Blacklist'];
         const existingOpsIds = new Set(workers.map(w => w.opsId.toLowerCase()));
         
-        let importedCount = 0;
-        let skippedCount = 0;
-
-        const newWorkers = json.reduce<Worker[]>((acc, row) => {
+        const workersToInsert = json.reduce<Omit<Worker, 'id'>[]>((acc, row) => {
             const opsId = row.opsId?.toString().trim();
-            if (!opsId || existingOpsIds.has(opsId.toLowerCase()) || acc.some(w => w.opsId.toLowerCase() === opsId.toLowerCase())) {
-                skippedCount++;
+            if (!opsId || existingOpsIds.has(opsId.toLowerCase())) {
                 return acc;
             }
 
             if (!row.fullName || !row.nik || !row.phone || !departmentValues.includes(row.department) || !statusValues.includes(row.status)) {
-                skippedCount++;
                 return acc;
             }
             
             existingOpsIds.add(opsId.toLowerCase());
-            importedCount++;
-
+            
             acc.push({
-                id: uuidv4(),
                 opsId: opsId,
                 fullName: row.fullName,
                 nik: row.nik.toString(),
@@ -145,18 +164,25 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
                 status: row.status,
                 createdAt: new Date().toISOString(),
             });
-
             return acc;
         }, []);
 
-        if (newWorkers.length > 0) {
-            setWorkers(prev => [...prev, ...newWorkers]);
+        if (workersToInsert.length > 0) {
+            const { error } = await supabase.from('workers').insert(workersToInsert);
+             if (error) {
+                alert(`Error importing workers: ${error.message}`);
+            } else {
+                alert(`Import Complete!\nSuccessfully imported: ${workersToInsert.length}\nSkipped (duplicates or invalid data): ${json.length - workersToInsert.length}`);
+                refreshData();
+            }
+        } else {
+            alert('No new workers to import.');
         }
-        
-        alert(`Import Complete!\nSuccessfully imported: ${importedCount}\nSkipped (duplicates or invalid data): ${skippedCount}`);
+
+        setLoadingAction(false);
     };
     reader.readAsBinaryString(file);
-    event.target.value = ''; // Reset file input
+    event.target.value = '';
   };
 
 
@@ -171,8 +197,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
             <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                 <DownloadIcon /> Template
             </button>
-            <button onClick={() => importFileRef.current?.click()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                <UploadIcon /> Import
+            <button onClick={() => importFileRef.current?.click()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" disabled={loadingAction}>
+                <UploadIcon /> {loadingAction ? 'Importing...' : 'Import'}
             </button>
             <input type="file" ref={importFileRef} onChange={handleImport} className="hidden" accept=".xlsx, .xls" />
             <button onClick={handleExport} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
@@ -249,8 +275,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
             <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={['SOC Operator', 'Cache', 'Return', 'Inventory']} required />
             <SelectField label="Status" name="status" defaultValue={selectedWorker?.status} options={['Active', 'Non Active', 'Blacklist']} required />
             <div className="md:col-span-2 pt-4">
-                <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors">
-                    Save Worker
+                <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors" disabled={loadingAction}>
+                    {loadingAction ? 'Saving...' : 'Save Worker'}
                 </button>
             </div>
         </form>
@@ -263,7 +289,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
             <p className="text-sm text-red-400 mt-2">This action cannot be undone.</p>
             <div className="flex justify-end gap-4 mt-6">
                 <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg">Delete</button>
+                <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
+                    {loadingAction ? 'Deleting...' : 'Delete'}
+                </button>
             </div>
           </div>
       </Modal>
