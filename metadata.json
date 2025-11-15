@@ -1,0 +1,5 @@
+{
+  "name": "ABSENSI NEXUS SUNTER DC",
+  "description": "An attendance management application for Nexus Sunter DC, featuring a dashboard, attendance tracking, and a worker database with full CRUD functionality.",
+  "requestFramePermissions": []
+}

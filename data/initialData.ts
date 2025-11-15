@@ -1,0 +1,61 @@
+import { Worker } from '../types';
+// @ts-ignore
+import { v4 as uuidv4 } from 'uuid';
+
+export const initialWorkers: Worker[] = [
+  {
+    id: uuidv4(),
+    opsId: 'NEX001',
+    fullName: 'Andi Wijaya',
+    nik: '3201234567890001',
+    phone: '081234567890',
+    contractType: 'Daily Worker Vendor - NEXUS',
+    department: 'SOC Operator',
+    createdAt: new Date().toISOString(),
+    status: 'Active',
+  },
+  {
+    id: uuidv4(),
+    opsId: 'NEX002',
+    fullName: 'Bunga Citra',
+    nik: '3201234567890002',
+    phone: '081234567891',
+    contractType: 'Daily Worker Vendor - NEXUS',
+    department: 'Cache',
+    createdAt: new Date().toISOString(),
+    status: 'Active',
+  },
+  {
+    id: uuidv4(),
+    opsId: 'NEX003',
+    fullName: 'Cahyo Purnama',
+    nik: '3201234567890003',
+    phone: '081234567892',
+    contractType: 'Daily Worker Vendor - NEXUS',
+    department: 'Return',
+    createdAt: new Date().toISOString(),
+    status: 'Non Active',
+  },
+    {
+    id: uuidv4(),
+    opsId: 'NEX004',
+    fullName: 'Dewi Lestari',
+    nik: '3201234567890004',
+    phone: '081234567893',
+    contractType: 'Daily Worker Vendor - NEXUS',
+    department: 'Inventory',
+    createdAt: new Date().toISOString(),
+    status: 'Active',
+  },
+  {
+    id: uuidv4(),
+    opsId: 'NEX005',
+    fullName: 'Eko Prasetyo',
+    nik: '3201234567890005',
+    phone: '081234567894',
+    contractType: 'Daily Worker Vendor - NEXUS',
+    department: 'Cache',
+    createdAt: new Date().toISOString(),
+    status: 'Blacklist',
+  },
+];
