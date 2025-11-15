@@ -16,7 +16,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
       onClick={onClose}
     >
       <div
-        className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg p-6 border border-gray-700 transform transition-all duration-300 scale-95 hover:scale-100"
+        className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-700 transform transition-all duration-300 scale-95 hover:scale-100"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center pb-3 border-b border-gray-700">

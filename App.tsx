@@ -15,9 +15,9 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for the active attendance session
-  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'date' | 'id'> | null>(null);
-  const [activeRecords, setActiveRecords] = useState<AttendanceRecord[]>([]);
+  // State for the active attendance session - NOW INCLUDES DATE
+  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'id'> | null>(null);
+  const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -54,7 +54,7 @@ const App: React.FC = () => {
       // Fetch all attendance records
       const { data: recordsData, error: recordsError } = await supabase
         .from('attendance_records')
-        .select('*');
+        .select('id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout'); // Ensure new fields are selected
       if (recordsError) throw recordsError;
 
       // Create a map of records by session_id for efficient lookup
@@ -79,10 +79,14 @@ const App: React.FC = () => {
           records: recordsForSession.map((rec: any) => {
              const worker = workerMap.get(rec.worker_id);
              return {
+                 id: rec.id, // Add the record's primary key
                  workerId: rec.worker_id,
                  opsId: worker?.opsId || 'N/A',
                  fullName: worker?.fullName || 'Unknown',
-                 timestamp: rec.timestamp
+                 timestamp: rec.timestamp,
+                 checkout_timestamp: rec.checkout_timestamp, // Add the checkout time
+                 manual_status: rec.manual_status, // Add the manual status
+                 is_takeout: rec.is_takeout, // Add the takeout status
              }
           }),
         };
@@ -92,28 +96,31 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error("Detailed Error:", err); // Log the full object to the console for debugging
 
-      let detailedMessage = "An unknown error occurred.";
+      // Robust error serialization to prevent "[object Object]"
+      const getCircularReplacer = () => {
+        const seen = new WeakSet();
+        return (key: any, value: any) => {
+          if (typeof value === "object" && value !== null) {
+            if (seen.has(value)) {
+              return "[Circular Reference]";
+            }
+            seen.add(value);
+          }
+          return value;
+        };
+      };
 
-      // Check if it's a Supabase error (PostgrestError) or similar object
-      if (err && typeof err === 'object') {
-        detailedMessage = `Message: ${err.message || 'No message provided.'}`;
-        if (err.details) {
-          detailedMessage += `\nDetails: ${err.details}`;
-        }
-        if (err.hint) {
-          detailedMessage += `\nHint: ${err.hint}`;
-        }
-        if (err.code) {
-          detailedMessage += `\nCode: ${err.code}`;
-        }
-      } else if (err instanceof Error) {
-        detailedMessage = err.message;
-      } else if (typeof err === 'string') {
-        detailedMessage = err;
+      let detailedMessage;
+      try {
+        detailedMessage = JSON.stringify(err, getCircularReplacer(), 2);
+      } catch (e) {
+        detailedMessage = "Could not serialize the error object. Please check the browser console for more details.";
       }
 
+
       // Add a specific, helpful suggestion for the most common problem
-      if (detailedMessage.includes("relation") && detailedMessage.includes("does not exist")) {
+      const errorMessageString = (typeof err?.message === 'string') ? err.message : '';
+      if (errorMessageString.includes("relation") && errorMessageString.includes("does not exist")) {
           detailedMessage += `\n\n----------------------------------------------------------------\n\n**Suggestion:**\nThis error means a required table could not be found in your database.\n\nPlease go to your Supabase project's **Table Editor** and ensure you have created the following tables with these exact names:\n- \`workers\`\n- \`attendance_sessions\`\n- \`attendance_records\`\n\nCheck carefully for any typos in the table names.`;
       }
       

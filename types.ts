@@ -11,10 +11,14 @@ export interface Worker {
 }
 
 export interface AttendanceRecord {
+  id: number; // The primary key from the attendance_records table
   workerId: string;
   opsId: string;
   fullName: string;
-  timestamp: string;
+  timestamp: string; // Check-in time
+  checkout_timestamp?: string | null; // Check-out time
+  manual_status?: 'Partial' | 'Buffer' | null; // New field for manual additions
+  is_takeout: boolean; // New field for takeout status
 }
 
 export interface AttendanceSession {

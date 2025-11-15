@@ -21,6 +21,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
@@ -99,6 +100,24 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         }
     }
   }
+
+  const handleDeleteAllWorkers = async () => {
+    setLoadingAction(true);
+    // This is a "delete all" pattern. It deletes all rows from the 'workers' table.
+    const { error } = await supabase
+      .from('workers')
+      .delete()
+      .not('id', 'is', null); // This condition effectively targets all rows.
+
+    setLoadingAction(false);
+    if (error) {
+      alert(`Error deleting all workers: ${error.message}`);
+    } else {
+      alert('All worker data has been successfully deleted.');
+      setIsDeleteAllConfirmOpen(false);
+      refreshData();
+    }
+  };
   
   const handleDownloadTemplate = () => {
     const headers = ['opsId', 'fullName', 'nik', 'phone', 'contractType', 'department', 'status'];
@@ -204,6 +223,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <button onClick={handleExport} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
                 <DownloadIcon /> Export
             </button>
+             <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                <DeleteIcon /> Delete All
+            </button>
         </div>
       </div>
 
@@ -291,6 +313,20 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                 <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
                 <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
                     {loadingAction ? 'Deleting...' : 'Delete'}
+                </button>
+            </div>
+          </div>
+      </Modal>
+
+      {/* Delete All Confirmation Modal */}
+      <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="Confirm Deletion of ALL Workers">
+          <div className="text-gray-300">
+            <p>Are you sure you want to delete <strong className="text-red-400">ALL {workers.length} worker records</strong> from the database?</p>
+            <p className="font-bold text-lg text-red-300 mt-4">This action is permanent and cannot be undone.</p>
+            <div className="flex justify-end gap-4 mt-6">
+                <button onClick={() => setIsDeleteAllConfirmOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
+                <button onClick={handleDeleteAllWorkers} className="py-2 px-4 bg-red-700 hover:bg-red-600 rounded-lg" disabled={loadingAction}>
+                    {loadingAction ? 'Deleting...' : 'Confirm Delete All'}
                 </button>
             </div>
           </div>
