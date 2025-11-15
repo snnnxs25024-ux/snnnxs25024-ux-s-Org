@@ -362,7 +362,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
+            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-500 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
                     <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
                     <p className="text-sm text-gray-500">{formattedDate}</p>
