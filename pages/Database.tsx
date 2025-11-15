@@ -10,7 +10,6 @@ import UploadIcon from '../components/icons/UploadIcon';
 import AddIcon from '../components/icons/AddIcon';
 import { supabase } from '../lib/supabaseClient';
 
-
 interface DatabaseProps {
   workers: Worker[];
   refreshData: () => void;
@@ -24,6 +23,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [importResults, setImportResults] = useState<{success: any[], failed: any[]}>({success: [], failed: []});
+  const [isImportSummaryOpen, setIsImportSummaryOpen] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const openViewModal = (worker: Worker) => {
@@ -32,7 +33,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   };
   
   const openEditModal = (worker: Worker | null) => {
-    setSelectedWorker(worker); // if null, it's a new worker
+    setSelectedWorker(worker);
     setIsEditModalOpen(true);
   };
   
@@ -45,37 +46,23 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     e.preventDefault();
     setLoadingAction(true);
     const formData = new FormData(e.currentTarget);
-    
-    // Construct the base data object
     const workerData = {
-        opsId: formData.get('opsId') as string,
-        fullName: formData.get('fullName') as string,
-        nik: formData.get('nik') as string,
-        phone: formData.get('phone') as string,
+        opsId: formData.get('opsId') as string, fullName: formData.get('fullName') as string,
+        nik: formData.get('nik') as string, phone: formData.get('phone') as string,
         contractType: formData.get('contractType') as Worker['contractType'],
-        department: formData.get('department') as Worker['department'],
-        status: formData.get('status') as Worker['status'],
+        department: formData.get('department') as Worker['department'], status: formData.get('status') as Worker['status'],
     };
-
     let error;
-
-    if (selectedWorker) { // Editing existing worker
-      const { error: updateError } = await supabase
-        .from('workers')
-        .update(workerData)
-        .eq('id', selectedWorker.id);
+    if (selectedWorker) {
+      const { error: updateError } = await supabase.from('workers').update(workerData).eq('id', selectedWorker.id);
       error = updateError;
-    } else { // Adding new worker
-      const { error: insertError } = await supabase
-        .from('workers')
-        .insert([{ ...workerData, createdAt: new Date().toISOString() }]);
+    } else {
+      const { error: insertError } = await supabase.from('workers').insert([{ ...workerData, createdAt: new Date().toISOString() }]);
       error = insertError;
     }
-    
     setLoadingAction(false);
-    if (error) {
-      alert(`Error saving worker: ${error.message}`);
-    } else {
+    if (error) alert(`Error saving worker: ${error.message}`);
+    else {
       setIsEditModalOpen(false);
       setSelectedWorker(null);
       refreshData();
@@ -85,15 +72,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const handleDeleteWorker = async () => {
     if(workerToDelete && workerToDelete.id){
         setLoadingAction(true);
-        const { error } = await supabase
-            .from('workers')
-            .delete()
-            .eq('id', workerToDelete.id);
-        
+        const { error } = await supabase.from('workers').delete().eq('id', workerToDelete.id);
         setLoadingAction(false);
-        if (error) {
-            alert(`Error deleting worker: ${error.message}`);
-        } else {
+        if (error) alert(`Error deleting worker: ${error.message}`);
+        else {
             setIsDeleteConfirmOpen(false);
             setWorkerToDelete(null);
             refreshData();
@@ -103,16 +85,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 
   const handleDeleteAllWorkers = async () => {
     setLoadingAction(true);
-    // This is a "delete all" pattern. It deletes all rows from the 'workers' table.
-    const { error } = await supabase
-      .from('workers')
-      .delete()
-      .not('id', 'is', null); // This condition effectively targets all rows.
-
+    const { error } = await supabase.from('workers').delete().not('id', 'is', null);
     setLoadingAction(false);
-    if (error) {
-      alert(`Error deleting all workers: ${error.message}`);
-    } else {
+    if (error) alert(`Error deleting all workers: ${error.message}`);
+    else {
       alert('All worker data has been successfully deleted.');
       setIsDeleteAllConfirmOpen(false);
       refreshData();
@@ -121,14 +97,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   
   const handleDownloadTemplate = () => {
     const headers = ['opsId', 'fullName', 'nik', 'phone', 'contractType', 'department', 'status'];
-    const sampleData = [{
-      opsId: 'NEX999',
-      fullName: 'John Doe',
-      nik: '3201010101010001',
-      phone: '081298765432',
-      contractType: 'Daily Worker Vendor - NEXUS',
-      department: 'SOC Operator',
-      status: 'Active'
+    const sampleData = [{ opsId: 'NEX999', fullName: 'John Doe', nik: '3201010101010001', phone: '081298765432',
+      contractType: 'Daily Worker Vendor - NEXUS', department: 'SOC Operator', status: 'Active'
     }];
     const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
     const workbook = XLSX.utils.book_new();
@@ -161,107 +131,118 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         const statusValues: Worker['status'][] = ['Active', 'Non Active', 'Blacklist'];
         const existingOpsIds = new Set(workers.map(w => w.opsId.toLowerCase()));
         
-        const workersToInsert = json.reduce<Omit<Worker, 'id'>[]>((acc, row) => {
+        const workersToInsert: Omit<Worker, 'id'>[] = [];
+        const failedImports: { row: any; reason: string }[] = [];
+
+        for (const row of json) {
             const opsId = row.opsId?.toString().trim();
-            if (!opsId || existingOpsIds.has(opsId.toLowerCase())) {
-                return acc;
+            if (!opsId) {
+                failedImports.push({ row, reason: "OpsID is missing." });
+                continue;
+            }
+            if (existingOpsIds.has(opsId.toLowerCase())) {
+                failedImports.push({ row, reason: "Duplicate OpsID." });
+                continue;
+            }
+            if (!row.fullName || !row.nik || !row.phone) {
+                 failedImports.push({ row, reason: "Required field is empty." });
+                continue;
+            }
+            if (!departmentValues.includes(row.department)) {
+                 failedImports.push({ row, reason: `Invalid department: ${row.department}` });
+                continue;
+            }
+            if (!statusValues.includes(row.status)) {
+                 failedImports.push({ row, reason: `Invalid status: ${row.status}` });
+                continue;
             }
 
-            if (!row.fullName || !row.nik || !row.phone || !departmentValues.includes(row.department) || !statusValues.includes(row.status)) {
-                return acc;
-            }
-            
             existingOpsIds.add(opsId.toLowerCase());
-            
-            acc.push({
-                opsId: opsId,
-                fullName: row.fullName,
-                nik: row.nik.toString(),
-                phone: row.phone.toString(),
-                contractType: 'Daily Worker Vendor - NEXUS',
-                department: row.department,
-                status: row.status,
+            workersToInsert.push({
+                opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
+                contractType: 'Daily Worker Vendor - NEXUS', department: row.department, status: row.status,
                 createdAt: new Date().toISOString(),
             });
-            return acc;
-        }, []);
+        }
+        
+        setImportResults({ success: workersToInsert, failed: failedImports });
 
         if (workersToInsert.length > 0) {
             const { error } = await supabase.from('workers').insert(workersToInsert);
-             if (error) {
-                alert(`Error importing workers: ${error.message}`);
+            if (error) {
+                alert(`Error during import: ${error.message}`);
+                setImportResults({ success: [], failed: json.map(row => ({ row, reason: 'Database error on save.'})) });
             } else {
-                alert(`Import Complete!\nSuccessfully imported: ${workersToInsert.length}\nSkipped (duplicates or invalid data): ${json.length - workersToInsert.length}`);
                 refreshData();
             }
-        } else {
-            alert('No new workers to import.');
         }
-
+        
+        setIsImportSummaryOpen(true);
         setLoadingAction(false);
     };
     reader.readAsBinaryString(file);
     event.target.value = '';
   };
 
-
   return (
-    <div>
-      <div className="flex flex-wrap justify-between items-center gap-4 mb-8">
-        <h1 className="text-4xl font-bold text-white">Worker Database</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+        <h1 className="text-3xl font-bold text-gray-800">Worker Database</h1>
         <div className="flex flex-wrap gap-2">
-            <button onClick={() => openEditModal(null)} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+            <button onClick={() => openEditModal(null)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <AddIcon /> Add New
             </button>
-            <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+            <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <DownloadIcon /> Template
             </button>
-            <button onClick={() => importFileRef.current?.click()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors" disabled={loadingAction}>
+            <button onClick={() => importFileRef.current?.click()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md" disabled={loadingAction}>
                 <UploadIcon /> {loadingAction ? 'Importing...' : 'Import'}
             </button>
             <input type="file" ref={importFileRef} onChange={handleImport} className="hidden" accept=".xlsx, .xls" />
-            <button onClick={handleExport} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+            <button onClick={handleExport} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <DownloadIcon /> Export
             </button>
-             <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+             <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <DeleteIcon /> Delete All
             </button>
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg shadow-lg overflow-hidden border border-gray-700">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
         <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-gray-700">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-blue-600 text-white">
                 <tr>
-                  <th className="p-3">OpsID</th>
-                  <th className="p-3">Nama Lengkap</th>
-                  <th className="p-3">Departemen</th>
-                  <th className="p-3">Tanggal Dibuat</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-center">Actions</th>
+                  <th className="p-3 font-semibold rounded-tl-lg">OpsID</th>
+                  <th className="p-3 font-semibold">Nama Lengkap</th>
+                  <th className="p-3 font-semibold">Departemen</th>
+                  <th className="p-3 font-semibold">Tanggal Dibuat</th>
+                  <th className="p-3 font-semibold">Status</th>
+                  <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-200">
                 {workers.map(worker => (
-                  <tr key={worker.id} className="border-b border-gray-700 hover:bg-gray-700/50">
+                  <tr key={worker.id} className="hover:bg-gray-50">
                     <td className="p-3">{worker.opsId}</td>
                     <td className="p-3">{worker.fullName}</td>
                     <td className="p-3">{worker.department}</td>
                     <td className="p-3">{new Date(worker.createdAt).toLocaleDateString()}</td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        worker.status === 'Active' ? 'bg-green-500/20 text-green-400' : 
-                        worker.status === 'Non Active' ? 'bg-yellow-500/20 text-yellow-400' : 
-                        'bg-red-500/20 text-red-400'
+                        worker.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                        worker.status === 'Non Active' ? 'bg-yellow-100 text-yellow-800' : 
+                        'bg-red-100 text-red-800'
                         }`}>
                         {worker.status}
                       </span>
                     </td>
-                    <td className="p-3 flex justify-center items-center gap-3">
-                        <button onClick={() => openViewModal(worker)} className="text-blue-400 hover:text-blue-300"><ViewIcon /></button>
-                        <button onClick={() => openEditModal(worker)} className="text-yellow-400 hover:text-yellow-300"><EditIcon /></button>
-                        <button onClick={() => openDeleteConfirm(worker)} className="text-red-400 hover:text-red-300"><DeleteIcon /></button>
+                    <td className="p-3">
+                      <div className="flex justify-center items-center gap-3">
+                        <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700"><ViewIcon /></button>
+                        <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700"><EditIcon /></button>
+                        <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700"><DeleteIcon /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -270,10 +251,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         </div>
       </div>
       
-      {/* View Worker Modal */}
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Worker Details">
         {selectedWorker && (
-            <div className="space-y-3 text-gray-300">
+            <div className="space-y-2 text-gray-600">
                 <p><strong>OpsID:</strong> {selectedWorker.opsId}</p>
                 <p><strong>Nama Lengkap:</strong> {selectedWorker.fullName}</p>
                 <p><strong>NIK:</strong> {selectedWorker.nik}</p>
@@ -286,7 +266,6 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         )}
       </Modal>
 
-      {/* Edit/Add Worker Modal */}
        <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={selectedWorker ? "Edit Worker" : "Add New Worker"}>
         <form onSubmit={handleSaveWorker} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <InputField label="OpsID" name="opsId" defaultValue={selectedWorker?.opsId} required />
@@ -297,61 +276,74 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={['SOC Operator', 'Cache', 'Return', 'Inventory']} required />
             <SelectField label="Status" name="status" defaultValue={selectedWorker?.status} options={['Active', 'Non Active', 'Blacklist']} required />
             <div className="md:col-span-2 pt-4">
-                <button type="submit" className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 rounded-lg transition-colors" disabled={loadingAction}>
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors" disabled={loadingAction}>
                     {loadingAction ? 'Saving...' : 'Save Worker'}
                 </button>
             </div>
         </form>
        </Modal>
        
-      {/* Delete Confirmation Modal */}
       <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion">
-          <div className="text-gray-300">
-            <p>Are you sure you want to delete worker <strong className="text-teal-400">{workerToDelete?.fullName}</strong> ({workerToDelete?.opsId})?</p>
-            <p className="text-sm text-red-400 mt-2">This action cannot be undone.</p>
+          <div>
+            <p className="text-gray-600">Are you sure you want to delete worker <strong className="text-blue-600">{workerToDelete?.fullName}</strong> ({workerToDelete?.opsId})?</p>
+            <p className="text-sm text-red-600 mt-2">This action cannot be undone.</p>
             <div className="flex justify-end gap-4 mt-6">
-                <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
+                <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
+                <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
                     {loadingAction ? 'Deleting...' : 'Delete'}
                 </button>
             </div>
           </div>
       </Modal>
 
-      {/* Delete All Confirmation Modal */}
       <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="Confirm Deletion of ALL Workers">
-          <div className="text-gray-300">
-            <p>Are you sure you want to delete <strong className="text-red-400">ALL {workers.length} worker records</strong> from the database?</p>
-            <p className="font-bold text-lg text-red-300 mt-4">This action is permanent and cannot be undone.</p>
+          <div>
+            <p className="text-gray-600">Are you sure you want to delete <strong className="text-red-600">ALL {workers.length} worker records</strong> from the database?</p>
+            <p className="font-bold text-lg text-red-500 mt-4">This action is permanent and cannot be undone.</p>
             <div className="flex justify-end gap-4 mt-6">
-                <button onClick={() => setIsDeleteAllConfirmOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                <button onClick={handleDeleteAllWorkers} className="py-2 px-4 bg-red-700 hover:bg-red-600 rounded-lg" disabled={loadingAction}>
+                <button onClick={() => setIsDeleteAllConfirmOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
+                <button onClick={handleDeleteAllWorkers} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
                     {loadingAction ? 'Deleting...' : 'Confirm Delete All'}
                 </button>
             </div>
           </div>
+      </Modal>
+      
+      <Modal isOpen={isImportSummaryOpen} onClose={() => setIsImportSummaryOpen(false)} title="Import Summary">
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+          <div>
+            <h3 className="font-semibold text-lg text-green-700">Successfully Imported ({importResults.success.length})</h3>
+            <ul className="text-sm text-gray-600 list-disc pl-5 mt-2 space-y-1">
+              {importResults.success.map((item, index) => <li key={index}>{item.fullName} ({item.opsId})</li>)}
+            </ul>
+          </div>
+          <div>
+            <h3 className="font-semibold text-lg text-red-700">Failed to Import ({importResults.failed.length})</h3>
+            <ul className="text-sm text-gray-600 list-disc pl-5 mt-2 space-y-1">
+              {importResults.failed.map((item, index) => <li key={index}>{item.row.fullName || 'N/A'} ({item.row.opsId || 'N/A'}) - <span className="font-medium text-red-600">{item.reason}</span></li>)}
+            </ul>
+          </div>
+        </div>
       </Modal>
 
     </div>
   );
 };
 
-// Helper components for form fields
 const InputField: React.FC<{label: string, name: string, defaultValue?: string, required?: boolean}> = ({label, name, defaultValue, required}) => (
     <div>
-        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-300">{label}</label>
-        <input type="text" id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500" />
+        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-700">{label}</label>
+        <input type="text" id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
     </div>
 );
 
 const SelectField: React.FC<{label: string, name: string, defaultValue?: string, options: string[], required?: boolean}> = ({label, name, defaultValue, options, required}) => (
     <div>
-        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-300">{label}</label>
-        <select id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-teal-500">
+        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-700">{label}</label>
+        <select id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
             {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
         </select>
     </div>
 );
-
 
 export default Database;

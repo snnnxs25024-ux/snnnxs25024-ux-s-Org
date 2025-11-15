@@ -12,18 +12,18 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center"
+      className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-50 flex justify-center items-center p-4"
       onClick={onClose}
     >
       <div
-        className="bg-gray-800 rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-700 transform transition-all duration-300 scale-95 hover:scale-100"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-200 transform transition-all duration-300 scale-95 animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center pb-3 border-b border-gray-700">
-          <h2 className="text-2xl font-semibold text-teal-400">{title}</h2>
+        <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-gray-800 transition-colors rounded-full p-1 hover:bg-gray-100"
             aria-label="Close modal"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -31,8 +31,17 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
             </svg>
           </button>
         </div>
-        <div className="mt-4">{children}</div>
+        <div className="mt-4 max-h-[75vh] overflow-y-auto">{children}</div>
       </div>
+       <style>{`
+        @keyframes scale-in {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        .animate-scale-in {
+          animation: scale-in 0.2s ease-out forwards;
+        }
+      `}</style>
     </div>
   );
 };

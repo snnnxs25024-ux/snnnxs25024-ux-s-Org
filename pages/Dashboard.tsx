@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -37,7 +39,6 @@ const generatePeriodicReport = (
   });
 
   for (const session of relevantSessions) {
-    // Count each worker only once per day, excluding takeouts
     const uniqueWorkerIdsThisDay = new Set<string>();
     for (const record of session.records) {
       if (!record.is_takeout) {
@@ -64,17 +65,17 @@ const generatePeriodicReport = (
 
 const ReportList: React.FC<{ title: string; data: PeriodicReportData }> = ({ title, data }) => (
     <div className="flex-1">
-        <h4 className="text-lg font-semibold text-teal-400 mb-2 border-b border-gray-600 pb-2">{title}</h4>
+        <h4 className="text-md font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-2">{title}</h4>
         <div className="max-h-64 overflow-y-auto pr-2">
             {data.length > 0 ? (
                 <ul className="space-y-2">
                     {data.map(item => (
-                        <li key={item.workerId} className="flex justify-between items-center text-sm bg-gray-700/50 p-2 rounded">
+                        <li key={item.workerId} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-md border border-gray-200">
                             <div>
-                                <p className="font-semibold text-white">{item.fullName}</p>
-                                <p className="text-xs text-gray-400">{item.opsId}</p>
+                                <p className="font-semibold text-gray-800">{item.fullName}</p>
+                                <p className="text-xs text-gray-500">{item.opsId}</p>
                             </div>
-                            <span className="font-bold text-lg text-teal-300">{item.attendanceCount} HK</span>
+                            <span className="font-bold text-lg text-blue-600">{item.attendanceCount} HK</span>
                         </li>
                     ))}
                 </ul>
@@ -85,19 +86,18 @@ const ReportList: React.FC<{ title: string; data: PeriodicReportData }> = ({ tit
     </div>
 );
 
-
-const StatCard: React.FC<{ title: string; value: string | number; description: string }> = ({ title, value, description }) => (
-    <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 hover:border-teal-500 transition-all duration-300">
-        <h3 className="text-lg font-semibold text-gray-400">{title}</h3>
-        <p className="text-4xl font-bold text-teal-400 my-2">{value}</p>
-        <p className="text-sm text-gray-500">{description}</p>
+const StatCard: React.FC<{ title: string; value: string | number; description: string; borderColor: string }> = ({ title, value, description, borderColor }) => (
+    <div className={`bg-white p-6 rounded-lg shadow-lg border border-gray-200 transition-all duration-300 hover:shadow-xl hover:border-blue-400 border-t-4 ${borderColor}`}>
+        <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+        <p className="text-3xl font-bold text-blue-600 my-2">{value}</p>
+        <p className="text-xs text-gray-400">{description}</p>
     </div>
 );
 
-const SummaryItem: React.FC<{ label: string; value: number }> = ({ label, value }) => (
-    <div className="text-center bg-gray-700/50 p-4 rounded-lg">
-        <p className="text-sm text-gray-400">{label}</p>
-        <p className="text-2xl font-bold text-white">{value}</p>
+const SummaryItem: React.FC<{ label: string; value: number; bgColor: string; textColor: string }> = ({ label, value, bgColor, textColor }) => (
+    <div className={`text-center p-4 rounded-lg ${bgColor}`}>
+        <p className={`text-xs uppercase font-semibold ${textColor} opacity-75`}>{label}</p>
+        <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
     </div>
 );
 
@@ -107,21 +107,17 @@ const calculateWorkDuration = (checkin: string, checkout: string | null | undefi
     const checkoutTime = new Date(checkout).getTime();
     if (isNaN(checkinTime) || isNaN(checkoutTime) || checkoutTime < checkinTime) return '-';
 
-    let diff = Math.abs(checkoutTime - checkinTime) / 1000;
-    
-    const nineHoursInSeconds = 9 * 3600;
-    const isAutoCheckout = (new Date(checkout).getTime() - new Date(checkin).getTime()) === nineHoursInSeconds * 1000;
-     if (isAutoCheckout || diff > nineHoursInSeconds) {
-        diff = nineHoursInSeconds;
+    let diff = Math.abs(checkoutTime - checkinTime);
+    const nineHoursInMillis = 9 * 3600 * 1000;
+    if (diff > nineHoursInMillis) {
+        diff = nineHoursInMillis;
     }
 
-    const hours = Math.floor(diff / 3600);
-    diff %= 3600;
-    const minutes = Math.floor(diff / 60);
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
-    return `${hours}h ${minutes}m`;
+    return `${hours}j ${minutes}m`;
 };
-
 
 const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData }) => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
@@ -150,12 +146,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         });
 
         if (relevantSessions.length === 0) return '0%';
-
         const totalPlanned = relevantSessions.reduce((sum, s) => sum + s.planMpp, 0);
         const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout).length, 0);
-
         if (totalPlanned === 0) return 'N/A';
-        
         const percentage = (totalActual / totalPlanned) * 100;
         return `${percentage.toFixed(1)}%`;
     };
@@ -195,41 +188,24 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
-
     const currentYear = today.getUTCFullYear();
     const currentMonth = today.getUTCMonth();
-
     const startOfWeek = new Date(today);
-    const day = startOfWeek.getUTCDay();
-    const diff = startOfWeek.getUTCDate() - day + (day === 0 ? -6 : 1); 
-    startOfWeek.setUTCDate(diff);
-
+    startOfWeek.setUTCDate(startOfWeek.getUTCDate() - today.getUTCDay() + (today.getUTCDay() === 0 ? -6 : 1));
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
-
     const counts = { today: 0, thisWeek: 0, thisMonth: 0, period1: 0, period2: 0 };
-
     attendanceHistory.forEach(session => {
         const sessionDate = new Date(session.date + 'T00:00:00Z');
         if (isNaN(sessionDate.getTime())) return;
-
         const attendanceCount = session.records.filter(r => !r.is_takeout).length;
-
-        if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
-            counts.thisWeek += attendanceCount;
-        }
-
+        if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) counts.thisWeek += attendanceCount;
         if (sessionDate.getUTCFullYear() === currentYear && sessionDate.getUTCMonth() === currentMonth) {
             counts.thisMonth += attendanceCount;
-            if (sessionDate.getTime() === today.getTime()) {
-                counts.today += attendanceCount;
-            }
+            if (sessionDate.getTime() === today.getTime()) counts.today += attendanceCount;
             const dayOfMonth = sessionDate.getUTCDate();
-            if (dayOfMonth >= 1 && dayOfMonth <= 15) {
-                counts.period1 += attendanceCount;
-            } else if (dayOfMonth >= 16) {
-                counts.period2 += attendanceCount;
-            }
+            if (dayOfMonth <= 15) counts.period1 += attendanceCount;
+            else counts.period2 += attendanceCount;
         }
     });
 
@@ -257,16 +233,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleDeleteSession = async () => {
         if (!selectedSession) return;
         setLoadingAction(true);
-        
-        const { error } = await supabase
-            .from('attendance_sessions')
-            .delete()
-            .match({ id: selectedSession.id });
-        
+        const { error } = await supabase.from('attendance_sessions').delete().match({ id: selectedSession.id });
         setLoadingAction(false);
-        if (error) {
-            alert(`Error deleting session: ${error.message}`);
-        } else {
+        if (error) alert(`Error deleting session: ${error.message}`);
+        else {
             setIsDeleteSessionModalOpen(false);
             setSelectedSession(null);
             refreshData();
@@ -276,82 +246,40 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleConfirmDeleteRecord = async () => {
         if (!recordToDelete) return;
         setLoadingAction(true);
-        const { error } = await supabase
-            .from('attendance_records')
-            .delete()
-            .eq('id', recordToDelete.id);
-
+        const { error } = await supabase.from('attendance_records').delete().eq('id', recordToDelete.id);
         setLoadingAction(false);
-        if (error) {
-            alert(`Error removing record: ${error.message}`);
-        } else {
+        if (error) alert(`Error removing record: ${error.message}`);
+        else {
             setIsDeleteRecordModalOpen(false);
-            // Optimistically update UI to feel faster
-            setSelectedSession(prev => prev ? { ...prev, records: prev.records.filter(r => r.id !== recordToDelete.id) } : null);
             setRecordToDelete(null);
-            refreshData(); // Fetch fresh data in the background
+            refreshData();
         }
     };
     
     const handleAction = async (action: 'checkout' | 'takeout', recordId: number) => {
         setLoadingAction(true);
-        
-        const updateData = action === 'checkout'
-            ? { checkout_timestamp: new Date().toISOString() }
-            : { is_takeout: true };
-            
-        const { data, error } = await supabase
-            .from('attendance_records')
-            .update(updateData)
-            .eq('id', recordId)
-            .select()
-            .single();
-            
+        const updateData = action === 'checkout' ? { checkout_timestamp: new Date().toISOString() } : { is_takeout: true };
+        const { error } = await supabase.from('attendance_records').update(updateData).eq('id', recordId);
         setLoadingAction(false);
-        if (error) {
-            alert(`Error updating record: ${error.message}`);
-        } else {
-            // Optimistically update UI
-            setSelectedSession(prev => {
-                if (!prev) return null;
-                return {
-                    ...prev,
-                    records: prev.records.map(r => r.id === recordId ? { ...r, ...data } : r)
-                };
-            });
-            refreshData(); // Fetch fresh data in the background
-        }
+        if (error) alert(`Error updating record: ${error.message}`);
+        else refreshData();
     };
 
     const handleCheckOutAll = async () => {
         if (!selectedSession) return;
-
         const now = new Date().getTime();
         const nineHoursInMillis = 9 * 60 * 60 * 1000;
-
-        const recordsToCheckOut = selectedSession.records.filter(r => {
-            const checkinTime = new Date(r.timestamp).getTime();
-            return !r.checkout_timestamp && !r.is_takeout && (now - checkinTime) < nineHoursInMillis;
-        });
-
+        const recordsToCheckOut = selectedSession.records.filter(r => !r.checkout_timestamp && !r.is_takeout && (now - new Date(r.timestamp).getTime()) < nineHoursInMillis);
         if (recordsToCheckOut.length === 0) {
             alert("All remaining workers have been auto-checked out or already checked out manually.");
             return;
         }
-        
         const recordIdsToCheckOut = recordsToCheckOut.map(r => r.id);
-
         setLoadingAction(true);
-        const { error } = await supabase
-            .from('attendance_records')
-            .update({ checkout_timestamp: new Date().toISOString() })
-            .in('id', recordIdsToCheckOut)
-            .is('checkout_timestamp', null);
-        
+        const { error } = await supabase.from('attendance_records').update({ checkout_timestamp: new Date().toISOString() }).in('id', recordIdsToCheckOut).is('checkout_timestamp', null);
         setLoadingAction(false);
-        if (error) {
-            alert(`Error checking out all: ${error.message}`);
-        } else {
+        if (error) alert(`Error checking out all: ${error.message}`);
+        else {
             refreshData();
             setIsManageModalOpen(false);
         }
@@ -360,55 +288,33 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleManualAdd = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         if (!selectedSession || !manualAddOpsId) return;
-
         setManualAddError(null);
         setLoadingAction(true);
-
         const worker = workers.find(w => w.opsId.toLowerCase() === manualAddOpsId.toLowerCase());
         if (!worker || !worker.id) {
             setManualAddError(`Worker with OpsID "${manualAddOpsId}" not found.`);
             setLoadingAction(false);
             return;
         }
-        
         if (selectedSession.records.some(r => r.workerId === worker.id)) {
             setManualAddError(`Worker ${worker.fullName} is already in this session.`);
             setLoadingAction(false);
             return;
         }
-
-        const { data, error } = await supabase.from('attendance_records').insert({
+        const { error } = await supabase.from('attendance_records').insert({
             session_id: selectedSession.id,
             worker_id: worker.id,
-            timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime).toISOString(),
+            timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
             manual_status: manualAddStatus,
-            is_takeout: false
-        }).select().single();
-        
+        });
         setLoadingAction(false);
-        if (error) {
-            setManualAddError(`Error adding worker: ${error.message}`);
-        } else {
+        if (error) setManualAddError(`Error adding worker: ${error.message}`);
+        else {
             setManualAddOpsId('');
-            // Optimistically update UI
-            if (data) {
-                const newRecord: AttendanceRecord = {
-                    id: data.id,
-                    workerId: worker.id,
-                    opsId: worker.opsId,
-                    fullName: worker.fullName,
-                    timestamp: data.timestamp,
-                    checkout_timestamp: data.checkout_timestamp,
-                    manual_status: data.manual_status,
-                    is_takeout: data.is_takeout,
-                };
-                setSelectedSession(prev => prev ? { ...prev, records: [...prev.records, newRecord] } : null);
-            }
             refreshData();
         }
     };
     
-    // --- New Report Logic ---
     const currentMonthReports = useMemo(() => {
         const year = new Date().getFullYear();
         const month = new Date().getMonth();
@@ -416,7 +322,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const period1End = new Date(Date.UTC(year, month, 15, 23, 59, 59, 999));
         const period2Start = new Date(Date.UTC(year, month, 16));
         const period2End = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-        
         return {
             period1: generatePeriodicReport(attendanceHistory, workers, period1Start, period1End),
             period2: generatePeriodicReport(attendanceHistory, workers, period2Start, period2End)
@@ -430,7 +335,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const modalPeriod1End = new Date(Date.UTC(year, month, 15, 23, 59, 59, 999));
         const modalPeriod2Start = new Date(Date.UTC(year, month, 16));
         const modalPeriod2End = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
-
         return {
             period1: generatePeriodicReport(attendanceHistory, workers, modalPeriod1Start, modalPeriod1End),
             period2: generatePeriodicReport(attendanceHistory, workers, modalPeriod2Start, modalPeriod2End)
@@ -445,56 +349,56 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
     return (
-        <div className="space-y-8">
-            <div className="flex justify-between items-center">
-                <h1 className="text-4xl font-bold text-white">Dashboard</h1>
-                <div className="flex gap-2">
-                     <button onClick={() => downloadReport('xlsx')} className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                        <DownloadIcon />
-                        Download Excel
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
+                <div className="flex flex-wrap gap-2">
+                     <button onClick={() => downloadReport('xlsx')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
+                        <DownloadIcon /> Excel
                     </button>
-                    <button onClick={() => downloadReport('pdf')} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                        <DownloadIcon />
-                        Download PDF
+                    <button onClick={() => downloadReport('pdf')} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
+                        <DownloadIcon /> PDF
                     </button>
                 </div>
             </div>
 
-            <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
-                    <h2 className="text-2xl font-semibold text-white">Ringkasan Kehadiran</h2>
-                    <p className="text-md text-gray-400">{formattedDate}</p>
+                    <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
+                    <p className="text-sm text-gray-500">{formattedDate}</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <SummaryItem label="Hari Ini" value={counts.today} />
-                    <SummaryItem label="Minggu Ini" value={counts.thisWeek} />
-                    <SummaryItem label="Bulan Ini" value={counts.thisMonth} />
-                    <SummaryItem label="Periode 1-15" value={counts.period1} />
-                    <SummaryItem label="Periode 16-31" value={counts.period2} />
+                    <SummaryItem label="Hari Ini" value={counts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
+                    <SummaryItem label="Minggu Ini" value={counts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
+                    <SummaryItem label="Bulan Ini" value={counts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
+                    <SummaryItem label="Periode 1-15" value={counts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
+                    <SummaryItem label="Periode 16-31" value={counts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard title="Daily Worker Active" value={activeWorkers} description="Total active workers" />
-                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentPeriod1} description="Based on current month" />
-                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentPeriod2} description="Based on current month" />
+                <StatCard title="Daily Worker Active" value={activeWorkers} description="Total active workers" borderColor="border-red-500" />
+                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentPeriod1} description="Based on current month" borderColor="border-green-500" />
+                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentPeriod2} description="Based on current month" borderColor="border-yellow-500" />
             </div>
 
-             <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-                <h2 className="text-2xl font-semibold text-white mb-4">Attendance History</h2>
-                <div className="overflow-x-auto max-h-96">
-                    <table className="w-full text-left">
-                        <thead className="bg-gray-700 sticky top-0">
+             <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-t-4 border-indigo-500 transition-shadow duration-300 hover:shadow-xl">
+                 <div className="p-4 sm:p-6">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History</h2>
+                 </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                        <thead className="bg-blue-600 text-white">
                             <tr>
-                                <th className="p-3">Date</th>
-                                <th className="p-3">Shift</th>
-                                <th className="p-3">Plan MPP</th>
-                                <th className="p-3">Actual</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3 text-center">Actions</th>
+                                <th className="p-3 font-semibold rounded-tl-lg">Date</th>
+                                <th className="p-3 font-semibold">Shift</th>
+                                <th className="p-3 font-semibold">Plan</th>
+                                <th className="p-3 font-semibold">Actual</th>
+                                <th className="p-3 font-semibold">Status</th>
+                                <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-200">
                             {attendanceHistory.length > 0 ? (
                                 [...attendanceHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session) => {
                                     const actual = session.records.filter(r => !r.is_takeout).length;
@@ -504,18 +408,20 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                     if (actual > planned) status = 'FULL FILL BUFFER';
                                     
                                     return (
-                                        <tr key={session.id} className="border-b border-gray-700 hover:bg-gray-700/50">
+                                        <tr key={session.id} className="hover:bg-gray-50">
                                             <td className="p-3">{session.date}</td>
-                                            <td className="p-3">{session.shiftTime} ({session.shiftId})</td>
+                                            <td className="p-3">{session.shiftTime}</td>
                                             <td className="p-3">{planned}</td>
                                             <td className="p-3">{actual}</td>
                                             <td className={`p-3 font-semibold ${
-                                                status === 'FULL FILL' ? 'text-green-400' :
-                                                status === 'GAP' ? 'text-red-400' : 'text-yellow-400'
+                                                status === 'FULL FILL' ? 'text-green-600' :
+                                                status === 'GAP' ? 'text-red-600' : 'text-yellow-600'
                                             }`}>{status}</td>
-                                            <td className="p-3 flex justify-center items-center gap-3">
-                                                <button onClick={() => openManageModal(session)} className="text-blue-400 hover:text-blue-300" aria-label="Manage Session"><ViewIcon /></button>
-                                                <button onClick={() => openDeleteSessionModal(session)} className="text-red-400 hover:text-red-300" aria-label="Delete Session"><DeleteIcon /></button>
+                                            <td className="p-3">
+                                                <div className="flex justify-center items-center gap-3">
+                                                    <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700" aria-label="Manage Session"><ViewIcon /></button>
+                                                    <button onClick={() => openDeleteSessionModal(session)} className="text-red-500 hover:text-red-700" aria-label="Delete Session"><DeleteIcon /></button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -530,23 +436,22 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-            {/* New Report Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-                    <h2 className="text-2xl font-semibold text-white mb-4">Laporan Periode Bulan Ini</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-purple-500 transition-shadow duration-300 hover:shadow-xl">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Laporan Periode Bulan Ini</h2>
                     <div className="flex flex-col md:flex-row gap-6">
                        <ReportList title="Periode 1-15" data={currentMonthReports.period1} />
                        <ReportList title="Periode 16-31" data={currentMonthReports.period2} />
                     </div>
                 </div>
-                 <div className="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-                    <h2 className="text-2xl font-semibold text-white mb-4">Arsip Laporan Bulanan</h2>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                 <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-pink-500 transition-shadow duration-300 hover:shadow-xl">
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Arsip Laporan Bulanan</h2>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                         {months.map((month, index) => (
                              <button 
                                 key={month}
                                 onClick={() => handleOpenReportModal(index)}
-                                className="bg-gray-700 hover:bg-teal-600 text-gray-300 hover:text-white font-semibold py-2 px-3 rounded-lg transition-colors text-sm"
+                                className="bg-gray-100 hover:bg-blue-600 text-gray-700 hover:text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 text-sm border border-gray-200 hover:border-blue-600"
                              >
                                 {month}
                              </button>
@@ -555,88 +460,63 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-
-            {/* Manage Attendance Modal */}
             <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session">
                 {selectedSession && (
-                    <>
-                        <div className="max-h-[50vh] overflow-y-auto">
+                    <div className="space-y-4">
+                        <div className="overflow-x-auto border rounded-lg">
                             <table className="w-full text-left text-sm">
-                                <thead className="bg-gray-700 sticky top-0">
+                                <thead className="bg-blue-600 text-white">
                                     <tr>
-                                        <th className="p-2">OpsID</th>
-                                        <th className="p-2">Nama Lengkap</th>
-                                        <th className="p-2">Jam Masuk</th>
-                                        <th className="p-2">Jam Pulang</th>
-                                        <th className="p-2">Total Jam</th>
-                                        <th className="p-2">Status</th>
-                                        <th className="p-2 text-center">Aksi</th>
+                                        <th className="p-2 font-semibold rounded-tl-lg">OpsID</th>
+                                        <th className="p-2 font-semibold">Nama Lengkap</th>
+                                        <th className="p-2 font-semibold">Jam Masuk</th>
+                                        <th className="p-2 font-semibold">Jam Pulang</th>
+                                        <th className="p-2 font-semibold">Total Jam</th>
+                                        <th className="p-2 font-semibold">Status</th>
+                                        <th className="p-2 font-semibold text-center rounded-tr-lg">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="divide-y divide-gray-200">
                                     {selectedSession.records.map(record => {
                                         const now = new Date().getTime();
                                         const checkinTime = new Date(record.timestamp).getTime();
                                         const nineHoursInMillis = 9 * 60 * 60 * 1000;
-
                                         let effectiveCheckoutTimeStr: string | null = record.checkout_timestamp || null;
                                         let isAutoCheckout = false;
-
                                         if (!effectiveCheckoutTimeStr && (now - checkinTime) > nineHoursInMillis) {
                                             effectiveCheckoutTimeStr = new Date(checkinTime + nineHoursInMillis).toISOString();
                                             isAutoCheckout = true;
                                         }
-                                        
                                         const isCheckedOut = !!record.checkout_timestamp || isAutoCheckout;
-                                        
                                         let statusText = 'On Plan';
-                                        let statusColor = 'text-green-400 bg-green-900/50';
+                                        let statusColor = 'bg-green-100 text-green-800';
                                         if(record.is_takeout) {
                                             statusText = 'Take Out';
-                                            statusColor = 'text-gray-400 bg-gray-700/50';
+                                            statusColor = 'bg-gray-200 text-gray-600';
                                         } else if (record.manual_status === 'Partial') {
                                             statusText = 'Partial';
-                                            statusColor = 'text-orange-400 bg-orange-900/50';
+                                            statusColor = 'bg-orange-100 text-orange-800';
                                         } else if (record.manual_status === 'Buffer') {
                                             statusText = 'Buffer';
-                                            statusColor = 'text-yellow-400 bg-yellow-900/50';
+                                            statusColor = 'bg-yellow-100 text-yellow-800';
                                         }
 
                                         return (
-                                            <tr key={record.id} className={`border-b border-gray-700 ${record.is_takeout ? 'opacity-50' : ''}`}>
+                                            <tr key={record.id} className={`hover:bg-gray-50 ${record.is_takeout ? 'opacity-60 bg-gray-100' : ''}`}>
                                                 <td className="p-2">{record.opsId}</td>
                                                 <td className="p-2">{record.fullName}</td>
-                                                <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID')}</td>
+                                                <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
                                                 <td className="p-2">
-                                                    {effectiveCheckoutTimeStr ? new Date(effectiveCheckoutTimeStr).toLocaleTimeString('id-ID') : '-'}
-                                                    {isAutoCheckout && <span className="text-xs text-yellow-400 ml-1">(Auto)</span>}
+                                                    {effectiveCheckoutTimeStr ? new Date(effectiveCheckoutTimeStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                                    {isAutoCheckout && <span className="text-xs text-yellow-600 ml-1">(Auto)</span>}
                                                 </td>
                                                 <td className="p-2 font-mono">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
                                                 <td className="p-2"><span className={`px-2 py-1 text-xs rounded-full font-semibold ${statusColor}`}>{statusText}</span></td>
-                                                <td className="p-2 text-center">
+                                                <td className="p-2">
                                                     <div className="flex justify-center items-center gap-2">
-                                                        <button 
-                                                            onClick={() => handleAction('takeout', record.id)}
-                                                            disabled={loadingAction || record.is_takeout}
-                                                            className="text-xs bg-gray-600 hover:bg-gray-500 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            TakeOut
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => handleAction('checkout', record.id)}
-                                                            disabled={loadingAction || isCheckedOut || record.is_takeout}
-                                                            className="text-xs bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            CheckOut
-                                                        </button>
-                                                        <button
-                                                            onClick={() => openDeleteRecordModal(record)}
-                                                            disabled={loadingAction}
-                                                            className="text-red-400 hover:text-red-300 disabled:opacity-50"
-                                                            aria-label={`Remove ${record.fullName}`}
-                                                        >
-                                                            <DeleteIcon />
-                                                        </button>
+                                                        <button onClick={() => handleAction('takeout', record.id)} disabled={loadingAction || record.is_takeout} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">TakeOut</button>
+                                                        <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || isCheckedOut || record.is_takeout} className="text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">CheckOut</button>
+                                                        <button onClick={() => openDeleteRecordModal(record)} disabled={loadingAction} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" aria-label={`Remove ${record.fullName}`}><DeleteIcon /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -645,58 +525,39 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </tbody>
                             </table>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-700">
+                        <div className="mt-4 pt-4 border-t border-gray-200">
                             <form onSubmit={handleManualAdd} className="space-y-3">
-                               <h4 className="text-lg font-semibold text-teal-400">Tambah Karyawan Manual</h4>
-                               {manualAddError && <p className="text-red-400 bg-red-900/50 p-2 rounded-lg text-sm">{manualAddError}</p>}
-                               <div className="flex gap-2">
-                                   <input
-                                      type="text"
-                                      value={manualAddOpsId}
-                                      onChange={(e) => setManualAddOpsId(e.target.value)}
-                                      placeholder="OpsID Karyawan"
-                                      className="flex-grow bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                      required
-                                   />
-                                   <select
-                                      value={manualAddStatus}
-                                      onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer')}
-                                      className="bg-gray-700 border border-gray-600 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                                   >
+                               <h4 className="text-md font-semibold text-gray-700">Tambah Karyawan Manual</h4>
+                               {manualAddError && <p className="text-red-600 bg-red-50 p-2 rounded-lg text-sm">{manualAddError}</p>}
+                               <div className="flex flex-col sm:flex-row gap-2">
+                                   <input type="text" value={manualAddOpsId} onChange={(e) => setManualAddOpsId(e.target.value)} placeholder="OpsID Karyawan" className="flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                                   <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer')} className="bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                        <option value="Partial">Partial</option>
                                        <option value="Buffer">Buffer</option>
                                    </select>
-                                   <button type="submit" disabled={loadingAction} className="bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50">
+                                   <button type="submit" disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50">
                                        {loadingAction ? '...' : 'Add'}
                                    </button>
                                </div>
                            </form>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-700 flex justify-end">
-                            <button
-                                onClick={handleCheckOutAll}
-                                disabled={loadingAction || !selectedSession.records.some(r => {
-                                    const checkinTime = new Date(r.timestamp).getTime();
-                                    return !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - checkinTime) < (9 * 60 * 60 * 1000);
-                                })}
-                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
+                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                            <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
                             </button>
                         </div>
-                    </>
+                    </div>
                 )}
             </Modal>
 
-            {/* Delete Session Confirmation Modal */}
             <Modal isOpen={isDeleteSessionModalOpen} onClose={() => setIsDeleteSessionModalOpen(false)} title="Confirm Session Deletion">
                 {selectedSession && (
-                    <div className="text-gray-300">
-                        <p>Are you sure you want to delete the attendance session for <strong className="text-teal-400">{selectedSession.date} ({selectedSession.shiftTime})</strong>?</p>
-                        <p className="text-sm text-red-400 mt-2">This will remove all {selectedSession.records.length} attendance records for this session. This action cannot be undone.</p>
+                    <div>
+                        <p className="text-gray-600">Are you sure you want to delete the attendance session for <strong className="text-blue-600">{selectedSession.date} ({selectedSession.shiftTime})</strong>?</p>
+                        <p className="text-sm text-red-600 mt-2">This will remove all {selectedSession.records.length} attendance records for this session. This action cannot be undone.</p>
                         <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setIsDeleteSessionModalOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                            <button onClick={handleDeleteSession} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
+                            <button onClick={() => setIsDeleteSessionModalOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
+                            <button onClick={handleDeleteSession} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
                                 {loadingAction ? 'Deleting...' : 'Delete Session'}
                             </button>
                         </div>
@@ -704,15 +565,14 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
 
-            {/* Delete Record Confirmation Modal */}
             <Modal isOpen={isDeleteRecordModalOpen} onClose={() => setIsDeleteRecordModalOpen(false)} title="Confirm Record Deletion">
                 {recordToDelete && (
-                    <div className="text-gray-300">
-                        <p>Are you sure you want to delete the attendance record for <strong className="text-teal-400">{recordToDelete.fullName}</strong>?</p>
-                        <p className="text-sm text-red-400 mt-2">This action is permanent and cannot be undone.</p>
+                    <div>
+                        <p className="text-gray-600">Are you sure you want to delete the attendance record for <strong className="text-blue-600">{recordToDelete.fullName}</strong>?</p>
+                        <p className="text-sm text-red-600 mt-2">This action is permanent and cannot be undone.</p>
                         <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setIsDeleteRecordModalOpen(false)} className="py-2 px-4 bg-gray-600 hover:bg-gray-500 rounded-lg">Cancel</button>
-                            <button onClick={handleConfirmDeleteRecord} className="py-2 px-4 bg-red-600 hover:bg-red-500 rounded-lg" disabled={loadingAction}>
+                            <button onClick={() => setIsDeleteRecordModalOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
+                            <button onClick={handleConfirmDeleteRecord} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
                                 {loadingAction ? 'Deleting...' : 'Delete Record'}
                             </button>
                         </div>
@@ -720,12 +580,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
             
-            {/* Monthly Report Modal */}
-            <Modal 
-                isOpen={isReportModalOpen} 
-                onClose={() => setIsReportModalOpen(false)} 
-                title={`Laporan Detail Bulan ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}
-            >
+            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={`Laporan Detail Bulan ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}>
                 {modalReportData && (
                     <div className="flex flex-col md:flex-row gap-6">
                         <ReportList title="Periode 1-15" data={modalReportData.period1} />
