@@ -41,6 +41,7 @@ const Attendance: React.FC<AttendanceProps> = ({
   const [opsIdInput, setOpsIdInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isEndingSession, setIsEndingSession] = useState(false);
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   
   const getTodayString = () => new Date().toISOString().split('T')[0];
@@ -162,6 +163,17 @@ const Attendance: React.FC<AttendanceProps> = ({
     }
   }
 
+  const handleCancelSession = () => {
+    setIsCancelConfirmOpen(true);
+  };
+
+  const handleConfirmCancel = () => {
+    setActiveSession(null);
+    setActiveRecords([]);
+    setIsCancelConfirmOpen(false);
+    setIsModalOpen(true);
+  };
+
   const handleRemoveActiveRecord = (workerIdToRemove: string) => {
     setActiveRecords(prev => prev.filter(record => record.workerId !== workerIdToRemove));
   };
@@ -263,7 +275,10 @@ const Attendance: React.FC<AttendanceProps> = ({
                     </table>
                 </div>
             </div>
-             <div className="flex justify-end">
+             <div className="flex justify-end gap-4">
+                  <button onClick={handleCancelSession} className="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm hover:shadow-md" disabled={isEndingSession}>
+                    Cancel Session
+                 </button>
                  <button onClick={handleEndSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm hover:shadow-md" disabled={isEndingSession}>
                     {isEndingSession ? 'Saving...' : 'End Session'}
                 </button>
@@ -317,6 +332,20 @@ const Attendance: React.FC<AttendanceProps> = ({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal isOpen={isCancelConfirmOpen} onClose={() => setIsCancelConfirmOpen(false)} title="Confirm Cancel Session">
+        <div>
+            <p className="text-gray-600">Are you sure you want to cancel this session? All scanned data will be lost and will not be saved.</p>
+            <div className="flex justify-end gap-4 mt-6">
+                <button onClick={() => setIsCancelConfirmOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">
+                    Keep Session
+                </button>
+                <button onClick={handleConfirmCancel} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold">
+                    Yes, Cancel
+                </button>
+            </div>
+        </div>
       </Modal>
     </div>
   );

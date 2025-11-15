@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import { Worker } from '../types';
 import Modal from '../components/Modal';
@@ -9,6 +9,8 @@ import DownloadIcon from '../components/icons/DownloadIcon';
 import UploadIcon from '../components/icons/UploadIcon';
 import AddIcon from '../components/icons/AddIcon';
 import { supabase } from '../lib/supabaseClient';
+import CopyIcon from '../components/icons/CopyIcon';
+import SearchIcon from '../components/icons/SearchIcon';
 
 interface DatabaseProps {
   workers: Worker[];
@@ -25,7 +27,25 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [loadingAction, setLoadingAction] = useState(false);
   const [importResults, setImportResults] = useState<{success: any[], failed: any[]}>({success: [], failed: []});
   const [isImportSummaryOpen, setIsImportSummaryOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  const filteredWorkers = useMemo(() => {
+    return workers
+      .filter(worker => {
+        if (departmentFilter === 'All') return true;
+        return worker.department === departmentFilter;
+      })
+      .filter(worker => {
+        if (searchTerm.trim() === '') return true;
+        const lowercasedSearch = searchTerm.toLowerCase();
+        return (
+          worker.fullName.toLowerCase().includes(lowercasedSearch) ||
+          worker.opsId.toLowerCase().includes(lowercasedSearch)
+        );
+      });
+  }, [workers, searchTerm, departmentFilter]);
 
   const openViewModal = (worker: Worker) => {
     setSelectedWorker(worker);
@@ -165,16 +185,29 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             });
         }
         
-        setImportResults({ success: workersToInsert, failed: failedImports });
+        const successfulInserts: any[] = [];
+        const dbSaveFailed: { row: any; reason: string }[] = [];
 
         if (workersToInsert.length > 0) {
-            const { error } = await supabase.from('workers').insert(workersToInsert);
-            if (error) {
-                alert(`Error during import: ${error.message}`);
-                setImportResults({ success: [], failed: json.map(row => ({ row, reason: 'Database error on save.'})) });
-            } else {
-                refreshData();
+            const BATCH_SIZE = 100;
+            for (let i = 0; i < workersToInsert.length; i += BATCH_SIZE) {
+                const batch = workersToInsert.slice(i, i + BATCH_SIZE);
+                const { data, error } = await supabase.from('workers').insert(batch).select();
+
+                if (error) {
+                    batch.forEach(worker => {
+                        dbSaveFailed.push({ row: worker, reason: `Database error on save: ${error.message}` });
+                    });
+                } else if (data) {
+                    successfulInserts.push(...batch);
+                }
             }
+        }
+
+        setImportResults({ success: successfulInserts, failed: [...failedImports, ...dbSaveFailed] });
+        
+        if (successfulInserts.length > 0) {
+            refreshData();
         }
         
         setIsImportSummaryOpen(true);
@@ -184,6 +217,20 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     event.target.value = '';
   };
 
+  const handleCopyOpsIds = () => {
+      const opsIdsToCopy = filteredWorkers.map(worker => worker.opsId).join('\n');
+      if (opsIdsToCopy) {
+          navigator.clipboard.writeText(opsIdsToCopy).then(() => {
+              alert(`${filteredWorkers.length} OpsIDs copied to clipboard!`);
+          }, (err) => {
+              alert('Failed to copy OpsIDs.');
+              console.error('Copy failed', err);
+          });
+      } else {
+          alert('No OpsIDs to copy.');
+      }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -191,6 +238,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         <div className="flex flex-wrap gap-2">
             <button onClick={() => openEditModal(null)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <AddIcon /> Add New
+            </button>
+            <button onClick={handleCopyOpsIds} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
+                <CopyIcon /> Salin OpsID
             </button>
             <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <DownloadIcon /> Template
@@ -205,6 +255,36 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
              <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
                 <DeleteIcon /> Delete All
             </button>
+        </div>
+      </div>
+      
+      <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
+              <SearchIcon className="h-5 w-5 text-gray-400" />
+            </span>
+            <input 
+              type="text"
+              placeholder="Search by OpsID or Name..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <select
+              value={departmentFilter}
+              onChange={e => setDepartmentFilter(e.target.value)}
+              className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">All Departments</option>
+              <option value="SOC Operator">SOC Operator</option>
+              <option value="Cache">Cache</option>
+              <option value="Return">Return</option>
+              <option value="Inventory">Inventory</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -222,30 +302,36 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {workers.map(worker => (
-                  <tr key={worker.id} className="hover:bg-gray-50">
-                    <td className="p-3">{worker.opsId}</td>
-                    <td className="p-3">{worker.fullName}</td>
-                    <td className="p-3">{worker.department}</td>
-                    <td className="p-3">{new Date(worker.createdAt).toLocaleDateString()}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        worker.status === 'Active' ? 'bg-green-100 text-green-800' : 
-                        worker.status === 'Non Active' ? 'bg-yellow-100 text-yellow-800' : 
-                        'bg-red-100 text-red-800'
-                        }`}>
-                        {worker.status}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <div className="flex justify-center items-center gap-3">
-                        <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700"><ViewIcon /></button>
-                        <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700"><EditIcon /></button>
-                        <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700"><DeleteIcon /></button>
-                      </div>
-                    </td>
+                {filteredWorkers.length > 0 ? (
+                  filteredWorkers.map(worker => (
+                    <tr key={worker.id} className="hover:bg-gray-50">
+                      <td className="p-3">{worker.opsId}</td>
+                      <td className="p-3">{worker.fullName}</td>
+                      <td className="p-3">{worker.department}</td>
+                      <td className="p-3">{new Date(worker.createdAt).toLocaleDateString()}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                          worker.status === 'Active' ? 'bg-green-100 text-green-800' : 
+                          worker.status === 'Non Active' ? 'bg-yellow-100 text-yellow-800' : 
+                          'bg-red-100 text-red-800'
+                          }`}>
+                          {worker.status}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex justify-center items-center gap-3">
+                          <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700"><ViewIcon /></button>
+                          <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700"><EditIcon /></button>
+                          <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700"><DeleteIcon /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="text-center p-6 text-gray-500">No workers found matching your criteria.</td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
         </div>

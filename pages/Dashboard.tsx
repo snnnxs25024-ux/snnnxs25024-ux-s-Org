@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -10,6 +8,7 @@ import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import { supabase } from '../lib/supabaseClient';
+import CopyIcon from '../components/icons/CopyIcon';
 
 
 interface DashboardProps {
@@ -34,7 +33,8 @@ const generatePeriodicReport = (
   const attendanceCounts: { [workerId: string]: number } = {};
 
   const relevantSessions = sessions.filter(session => {
-    const sessionDate = new Date(session.date + 'T00:00:00Z');
+    // Use local time for comparison by avoiding 'Z'
+    const sessionDate = new Date(session.date + 'T00:00:00');
     return sessionDate >= startDate && sessionDate <= endDate;
   });
 
@@ -137,12 +137,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const calculateFulfillment = (startDay: number, endDay: number) => {
         const today = new Date();
         const relevantSessions = attendanceHistory.filter(session => {
-            const sessionDate = new Date(session.date + 'T00:00:00Z');
+            // Use local time parsing
+            const sessionDate = new Date(session.date + 'T00:00:00');
             if (isNaN(sessionDate.getTime())) return false;
-            return sessionDate.getUTCMonth() === today.getUTCMonth() &&
-                   sessionDate.getUTCFullYear() === today.getUTCFullYear() &&
-                   sessionDate.getUTCDate() >= startDay &&
-                   sessionDate.getUTCDate() <= endDay;
+            return sessionDate.getMonth() === today.getMonth() &&
+                   sessionDate.getFullYear() === today.getFullYear() &&
+                   sessionDate.getDate() >= startDay &&
+                   sessionDate.getDate() <= endDay;
         });
 
         if (relevantSessions.length === 0) return '0%';
@@ -186,28 +187,55 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         }
     };
     
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
-    const currentYear = today.getUTCFullYear();
-    const currentMonth = today.getUTCMonth();
-    const startOfWeek = new Date(today);
-    startOfWeek.setUTCDate(startOfWeek.getUTCDate() - today.getUTCDay() + (today.getUTCDay() === 0 ? -6 : 1));
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
-    const counts = { today: 0, thisWeek: 0, thisMonth: 0, period1: 0, period2: 0 };
-    attendanceHistory.forEach(session => {
-        const sessionDate = new Date(session.date + 'T00:00:00Z');
-        if (isNaN(sessionDate.getTime())) return;
-        const attendanceCount = session.records.filter(r => !r.is_takeout).length;
-        if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) counts.thisWeek += attendanceCount;
-        if (sessionDate.getUTCFullYear() === currentYear && sessionDate.getUTCMonth() === currentMonth) {
-            counts.thisMonth += attendanceCount;
-            if (sessionDate.getTime() === today.getTime()) counts.today += attendanceCount;
-            const dayOfMonth = sessionDate.getUTCDate();
-            if (dayOfMonth <= 15) counts.period1 += attendanceCount;
-            else counts.period2 += attendanceCount;
-        }
-    });
+    const summaryCounts = useMemo(() => {
+        const today_local = new Date();
+        
+        // Fix for timezone issue: create YYYY-MM-DD string from local date components
+        const year = today_local.getFullYear();
+        const month = (today_local.getMonth() + 1).toString().padStart(2, '0');
+        const day = today_local.getDate().toString().padStart(2, '0');
+        const todayString = `${year}-${month}-${day}`;
+
+        const currentYear = today_local.getFullYear();
+        const currentMonth = today_local.getMonth();
+
+        const startOfWeek = new Date(today_local);
+        startOfWeek.setDate(startOfWeek.getDate() - today_local.getDay() + (today_local.getDay() === 0 ? -6 : 1));
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        const counts = { today: 0, thisWeek: 0, thisMonth: 0, period1: 0, period2: 0 };
+
+        attendanceHistory.forEach(session => {
+            const sessionDate = new Date(session.date + 'T00:00:00'); 
+            if (isNaN(sessionDate.getTime())) return;
+            
+            const attendanceCount = session.records.filter(r => !r.is_takeout).length;
+
+            if (session.date === todayString) {
+                counts.today += attendanceCount;
+            }
+
+            if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
+                counts.thisWeek += attendanceCount;
+            }
+
+            if (sessionDate.getFullYear() === currentYear && sessionDate.getMonth() === currentMonth) {
+                counts.thisMonth += attendanceCount;
+                const dayOfMonth = sessionDate.getDate();
+                if (dayOfMonth <= 15) {
+                    counts.period1 += attendanceCount;
+                } else {
+                    counts.period2 += attendanceCount;
+                }
+            }
+        });
+        return counts;
+    }, [attendanceHistory]);
+
 
     const formattedDate = new Intl.DateTimeFormat('id-ID', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -316,12 +344,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     };
     
     const currentMonthReports = useMemo(() => {
-        const year = new Date().getFullYear();
-        const month = new Date().getMonth();
-        const period1Start = new Date(Date.UTC(year, month, 1));
-        const period1End = new Date(Date.UTC(year, month, 15, 23, 59, 59, 999));
-        const period2Start = new Date(Date.UTC(year, month, 16));
-        const period2End = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = today.getMonth();
+        const period1Start = new Date(year, month, 1);
+        const period1End = new Date(year, month, 15, 23, 59, 59, 999);
+        const period2Start = new Date(year, month, 16);
+        const period2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
         return {
             period1: generatePeriodicReport(attendanceHistory, workers, period1Start, period1End),
             period2: generatePeriodicReport(attendanceHistory, workers, period2Start, period2End)
@@ -331,10 +360,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const modalReportData = useMemo(() => {
         if (!selectedReportMonth) return null;
         const { month, year } = selectedReportMonth;
-        const modalPeriod1Start = new Date(Date.UTC(year, month, 1));
-        const modalPeriod1End = new Date(Date.UTC(year, month, 15, 23, 59, 59, 999));
-        const modalPeriod2Start = new Date(Date.UTC(year, month, 16));
-        const modalPeriod2End = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
+        const modalPeriod1Start = new Date(year, month, 1);
+        const modalPeriod1End = new Date(year, month, 15, 23, 59, 59, 999);
+        const modalPeriod2Start = new Date(year, month, 16);
+        const modalPeriod2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
         return {
             period1: generatePeriodicReport(attendanceHistory, workers, modalPeriod1Start, modalPeriod1End),
             period2: generatePeriodicReport(attendanceHistory, workers, modalPeriod2Start, modalPeriod2End)
@@ -347,6 +376,25 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     };
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+    const handleCopyOpsIds = () => {
+      if (!selectedSession) return;
+      const opsIdsToCopy = selectedSession.records
+          .filter(record => !record.is_takeout)
+          .map(record => record.opsId)
+          .join('\n');
+      
+      if (opsIdsToCopy) {
+          navigator.clipboard.writeText(opsIdsToCopy).then(() => {
+              alert(`${opsIdsToCopy.split('\n').length} OpsIDs copied to clipboard!`);
+          }, (err) => {
+              alert('Failed to copy OpsIDs.');
+              console.error('Copy failed', err);
+          });
+      } else {
+          alert('No OpsIDs to copy in this session.');
+      }
+    };
 
     return (
         <div className="space-y-6">
@@ -362,17 +410,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-500 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
+            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
                     <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
                     <p className="text-sm text-gray-500">{formattedDate}</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <SummaryItem label="Hari Ini" value={counts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
-                    <SummaryItem label="Minggu Ini" value={counts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
-                    <SummaryItem label="Bulan Ini" value={counts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
-                    <SummaryItem label="Periode 1-15" value={counts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
-                    <SummaryItem label="Periode 16-31" value={counts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
+                    <SummaryItem label="Hari Ini" value={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
+                    <SummaryItem label="Minggu Ini" value={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
+                    <SummaryItem label="Bulan Ini" value={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
+                    <SummaryItem label="Periode 1-15" value={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
+                    <SummaryItem label="Periode 16-31" value={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
                 </div>
             </div>
 
@@ -541,7 +589,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                </div>
                            </form>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                            <button onClick={handleCopyOpsIds} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
+                                <CopyIcon /> Salin OpsID
+                            </button>
                             <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
                             </button>
