@@ -63,14 +63,17 @@ const generatePeriodicReport = (
   return report.sort((a, b) => b.attendanceCount - a.attendanceCount);
 };
 
-const ReportList: React.FC<{ title: string; data: PeriodicReportData }> = ({ title, data }) => (
+const ReportList: React.FC<{ title: string; data: PeriodicReportData; onWorkerClick: (workerId: string, workerName: string) => void; }> = ({ title, data, onWorkerClick }) => (
     <div className="flex-1">
         <h4 className="text-md font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-2">{title}</h4>
         <div className="max-h-64 overflow-y-auto pr-2">
             {data.length > 0 ? (
                 <ul className="space-y-2">
                     {data.map(item => (
-                        <li key={item.workerId} className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-md border border-gray-200">
+                        <li key={item.workerId} 
+                            className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-md border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                            onClick={() => onWorkerClick(item.workerId, item.fullName)}
+                        >
                             <div>
                                 <p className="font-semibold text-gray-800">{item.fullName}</p>
                                 <p className="text-xs text-gray-500">{item.opsId}</p>
@@ -129,8 +132,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [selectedReportMonth, setSelectedReportMonth] = useState<{ month: number; year: number } | null>(null);
     const [manualAddOpsId, setManualAddOpsId] = useState('');
-    const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer'>('Partial');
+    const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer' | 'On Plan'>('On Plan');
     const [manualAddError, setManualAddError] = useState<string | null>(null);
+    const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
+    const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string }[], total: number } | null>(null);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
@@ -333,7 +338,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             session_id: selectedSession.id,
             worker_id: worker.id,
             timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
-            manual_status: manualAddStatus,
+            manual_status: manualAddStatus === 'On Plan' ? null : manualAddStatus,
         });
         setLoadingAction(false);
         if (error) setManualAddError(`Error adding worker: ${error.message}`);
@@ -373,6 +378,31 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleOpenReportModal = (monthIndex: number) => {
         setSelectedReportMonth({ month: monthIndex, year: new Date().getFullYear() });
         setIsReportModalOpen(true);
+    };
+
+    const handleWorkerClickInReport = (workerId: string, workerName: string, period: string, startDate: Date, endDate: Date) => {
+        const relevantSessions = attendanceHistory.filter(session => {
+            const sessionDate = new Date(session.date + 'T00:00:00');
+            return sessionDate >= startDate && sessionDate <= endDate;
+        });
+
+        const attendanceDetails = relevantSessions
+            .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout))
+            .map(session => ({
+                date: session.date,
+                shiftTime: session.shiftTime
+            }))
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}`, item])).values());
+
+        setDetailReportData({
+            workerName,
+            period,
+            dates: uniqueDetails,
+            total: uniqueDetails.length
+        });
+        setIsDetailReportModalOpen(true);
     };
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -488,8 +518,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-purple-500 transition-shadow duration-300 hover:shadow-xl">
                     <h2 className="text-lg font-semibold text-gray-800 mb-4">Laporan Periode Bulan Ini</h2>
                     <div className="flex flex-col md:flex-row gap-6">
-                       <ReportList title="Periode 1-15" data={currentMonthReports.period1} />
-                       <ReportList title="Periode 16-31" data={currentMonthReports.period2} />
+                       <ReportList title="Periode 1-15" data={currentMonthReports.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date(new Date().getFullYear(), new Date().getMonth(), 15, 23, 59, 59, 999))} />
+                       <ReportList title="Periode 16-31" data={currentMonthReports.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 16), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999))} />
                     </div>
                 </div>
                  <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-pink-500 transition-shadow duration-300 hover:shadow-xl">
@@ -579,7 +609,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                {manualAddError && <p className="text-red-600 bg-red-50 p-2 rounded-lg text-sm">{manualAddError}</p>}
                                <div className="flex flex-col sm:flex-row gap-2">
                                    <input type="text" value={manualAddOpsId} onChange={(e) => setManualAddOpsId(e.target.value)} placeholder="OpsID Karyawan" className="flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                                   <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer')} className="bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                   <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer' | 'On Plan')} className="bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                       <option value="On Plan">On Plan</option>
                                        <option value="Partial">Partial</option>
                                        <option value="Buffer">Buffer</option>
                                    </select>
@@ -632,14 +663,40 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             </Modal>
             
             <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={`Laporan Detail Bulan ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}>
-                {modalReportData && (
+                {modalReportData && selectedReportMonth && (
                     <div className="flex flex-col md:flex-row gap-6">
-                        <ReportList title="Periode 1-15" data={modalReportData.period1} />
-                        <ReportList title="Periode 16-31" data={modalReportData.period2} />
+                        <ReportList title="Periode 1-15" data={modalReportData.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 1), new Date(selectedReportMonth.year, selectedReportMonth.month, 15, 23, 59, 59, 999))} />
+                        <ReportList title="Periode 16-31" data={modalReportData.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 16), new Date(selectedReportMonth.year, selectedReportMonth.month + 1, 0, 23, 59, 59, 999))} />
                     </div>
                 )}
             </Modal>
-
+            
+            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`}>
+                {detailReportData && (
+                    <div className="space-y-4">
+                        <p className="font-semibold text-gray-700">{detailReportData.period}</p>
+                        <div className="max-h-60 overflow-y-auto border rounded-lg">
+                             <ul className="divide-y divide-gray-200">
+                                {detailReportData.dates.length > 0 ? (
+                                    detailReportData.dates.map((item, index) => (
+                                        <li key={index} className="p-3 flex justify-between items-center">
+                                            <span>
+                                                {new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(item.date + 'T00:00:00'))}
+                                            </span>
+                                            <span className="text-sm font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-md">
+                                                {item.shiftTime}
+                                            </span>
+                                        </li>
+                                    ))
+                                ) : (
+                                    <li className="p-3 text-gray-500">Tidak ada catatan kehadiran pada periode ini.</li>
+                                )}
+                             </ul>
+                        </div>
+                        <p className="font-bold text-right pt-2 border-t">Total Kehadiran: {detailReportData.total} Hari Kerja</p>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };
