@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
@@ -31,7 +33,7 @@ const shiftIdOptions = [
     'SOCSTROPS1221 Shift 12 12:00 - 00:00', 'SOCSTROPS1322 Shift 13 13:00 - 22:00', 'SOCSTROPS1423 Shift 14 14:00 - 02:00',
     'SOCSTROPS1500 Shift 15 15:00 - 03:00', 'SOCSTROPS1601 Shift 16 16:00 - 04:00', 'SOCSTROPS1702 Shift 17 17:00 - 02:00',
     'SOCSTROPS1803 Shift 18 18:00 - 06:00', 'SOCSTROPS1904 Shift 19 19:00 - 07:00', 'SOCSTROPS2005 Shift 20 20:00 - 05:00',
-    'SOCSTROPS2207 Shift 22 22:00 - 10:00', 'SOCSTROPS2308 Shift 23 23:00 - 08:00',
+    'SOCSTROPS2106 Shift 21 21:00 - 09:00', 'SOCSTROPS2207 Shift 22 22:00 - 10:00', 'SOCSTROPS2308 Shift 23 23:00 - 08:00',
 ];
 
 const Attendance: React.FC<AttendanceProps> = ({ 
@@ -126,11 +128,7 @@ const Attendance: React.FC<AttendanceProps> = ({
       if(lastRecord && lastRecord.checkout_timestamp){
         const lastCheckoutDate = new Date(lastRecord.checkout_timestamp);
         const today = new Date();
-        if (lastCheckoutDate.toDateString() === today.toDateString()) {
-            setError(`Worker ${worker.fullName} has already completed a shift today.`);
-            setOpsIdInput('');
-            return;
-        }
+
         const nineHoursInMillis = 9 * 60 * 60 * 1000;
         if((today.getTime() - lastCheckoutDate.getTime()) < nineHoursInMillis){
             const timeLeft = nineHoursInMillis - (today.getTime() - lastCheckoutDate.getTime());
