@@ -86,11 +86,40 @@ const Attendance: React.FC<AttendanceProps> = ({
           return;
       }
 
-      const { data: activeCheckin } = await supabase.from('attendance_records').select('id').eq('worker_id', worker.id).is('checkout_timestamp', null).limit(1).single();
+      // Smarter check for active check-ins
+      const { data: activeCheckin } = await supabase
+        .from('attendance_records')
+        .select('id, timestamp')
+        .eq('worker_id', worker.id)
+        .is('checkout_timestamp', null)
+        .limit(1)
+        .single();
+
       if (activeCheckin) {
-          setError(`Worker ${worker.fullName} is already checked in and has not checked out yet.`);
-          setOpsIdInput('');
-          return;
+          const checkinTime = new Date(activeCheckin.timestamp).getTime();
+          const now = new Date().getTime();
+          const nineHoursInMillis = 9 * 60 * 60 * 1000;
+          
+          if ((now - checkinTime) > nineHoursInMillis) {
+              // Stale session found, auto-close it
+              const autoCheckoutTime = new Date(checkinTime + nineHoursInMillis).toISOString();
+              const { error: updateError } = await supabase
+                  .from('attendance_records')
+                  .update({ checkout_timestamp: autoCheckoutTime })
+                  .eq('id', activeCheckin.id);
+
+              if (updateError) {
+                  setError(`Could not auto-close stale session for ${worker.fullName}. Error: ${updateError.message}`);
+                  setOpsIdInput('');
+                  return;
+              }
+              // If successful, proceed with new check-in
+          } else {
+              // Genuinely active session, block check-in
+              setError(`Worker ${worker.fullName} is already checked in and has not checked out yet.`);
+              setOpsIdInput('');
+              return;
+          }
       }
 
       const { data: lastRecord } = await supabase.from('attendance_records').select('checkout_timestamp').eq('worker_id', worker.id).not('checkout_timestamp', 'is', null).order('checkout_timestamp', { ascending: false }).limit(1).single();
