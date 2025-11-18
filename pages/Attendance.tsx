@@ -1,5 +1,3 @@
-
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
@@ -77,67 +75,16 @@ const Attendance: React.FC<AttendanceProps> = ({
     }
   };
   
-  const handleScan = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleScan = (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!opsIdInput.trim() || !activeSession) return;
 
       const worker = workers.find(w => w.opsId.toLowerCase() === opsIdInput.toLowerCase() && w.status === 'Active');
+
       if (!worker || !worker.id) {
           setError(`Worker with OpsID "${opsIdInput}" not found or is inactive.`);
           setOpsIdInput('');
           return;
-      }
-
-      // Smarter check for active check-ins
-      const { data: activeCheckin } = await supabase
-        .from('attendance_records')
-        .select('id, timestamp')
-        .eq('worker_id', worker.id)
-        .is('checkout_timestamp', null)
-        .limit(1)
-        .single();
-
-      if (activeCheckin) {
-          const checkinTime = new Date(activeCheckin.timestamp).getTime();
-          const now = new Date().getTime();
-          const nineHoursInMillis = 9 * 60 * 60 * 1000;
-          
-          if ((now - checkinTime) > nineHoursInMillis) {
-              // Stale session found, auto-close it
-              const autoCheckoutTime = new Date(checkinTime + nineHoursInMillis).toISOString();
-              const { error: updateError } = await supabase
-                  .from('attendance_records')
-                  .update({ checkout_timestamp: autoCheckoutTime })
-                  .eq('id', activeCheckin.id);
-
-              if (updateError) {
-                  setError(`Could not auto-close stale session for ${worker.fullName}. Error: ${updateError.message}`);
-                  setOpsIdInput('');
-                  return;
-              }
-              // If successful, proceed with new check-in
-          } else {
-              // Genuinely active session, block check-in
-              setError(`Worker ${worker.fullName} is already checked in and has not checked out yet.`);
-              setOpsIdInput('');
-              return;
-          }
-      }
-
-      const { data: lastRecord } = await supabase.from('attendance_records').select('checkout_timestamp').eq('worker_id', worker.id).not('checkout_timestamp', 'is', null).order('checkout_timestamp', { ascending: false }).limit(1).single();
-      if(lastRecord && lastRecord.checkout_timestamp){
-        const lastCheckoutDate = new Date(lastRecord.checkout_timestamp);
-        const today = new Date();
-
-        const nineHoursInMillis = 9 * 60 * 60 * 1000;
-        if((today.getTime() - lastCheckoutDate.getTime()) < nineHoursInMillis){
-            const timeLeft = nineHoursInMillis - (today.getTime() - lastCheckoutDate.getTime());
-            const hoursLeft = Math.floor(timeLeft / (1000 * 60 * 60));
-            const minutesLeft = Math.ceil((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
-            setError(`Worker ${worker.fullName} is in a cooldown period for another ${hoursLeft}h ${minutesLeft}m.`);
-            setOpsIdInput('');
-            return;
-        }
       }
 
       const allowedDepartment = divisionToDepartmentMap[activeSession.division];

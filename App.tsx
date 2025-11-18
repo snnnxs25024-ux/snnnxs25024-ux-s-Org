@@ -150,7 +150,7 @@ const App: React.FC = () => {
 
     switch (currentPage) {
       case 'Dashboard':
-        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} />;
+        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} setAttendanceHistory={setAttendanceHistory} />;
       case 'Absensi':
         return <Attendance 
                   workers={workers} 
@@ -163,7 +163,7 @@ const App: React.FC = () => {
       case 'Data Base':
         return <Database workers={workers} refreshData={fetchData} />;
       default:
-        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} />;
+        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} setAttendanceHistory={setAttendanceHistory} />;
     }
   };
 

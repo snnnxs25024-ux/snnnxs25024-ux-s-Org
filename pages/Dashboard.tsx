@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -15,6 +16,7 @@ interface DashboardProps {
     workers: Worker[];
     attendanceHistory: AttendanceSession[];
     refreshData: () => void;
+    setAttendanceHistory: React.Dispatch<React.SetStateAction<AttendanceSession[]>>;
 }
 
 type PeriodicReportData = {
@@ -122,7 +124,7 @@ const calculateWorkDuration = (checkin: string, checkout: string | null | undefi
     return `${hours}j ${minutes}m`;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData }) => {
+const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData, setAttendanceHistory }) => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
     const [isDeleteSessionModalOpen, setIsDeleteSessionModalOpen] = useState(false);
@@ -136,6 +138,18 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [manualAddError, setManualAddError] = useState<string | null>(null);
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
     const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string }[], total: number } | null>(null);
+
+    useEffect(() => {
+        if (selectedSession?.id) {
+            const updatedSession = attendanceHistory.find(s => s.id === selectedSession.id);
+            if (updatedSession) {
+                setSelectedSession(updatedSession);
+            } else {
+                // Session was deleted, so close the modal.
+                setIsManageModalOpen(false);
+            }
+        }
+    }, [attendanceHistory, selectedSession?.id]);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
@@ -166,6 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const reportData = attendanceHistory.flatMap(session => 
             session.records.map(record => ({
                 'Tanggal': session.date,
+                'Divisi': session.division,
                 'Shift Jam': session.shiftTime,
                 'Shift ID': session.shiftId,
                 'Ops ID': record.opsId,
@@ -185,7 +200,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         } else {
             const doc = new jsPDF();
             autoTable(doc, {
-                head: [['Tanggal', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
+                head: [['Tanggal', 'Divisi', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
                 body: reportData.map(Object.values),
             });
             doc.save('Absensi_Report.pdf');
@@ -277,25 +292,52 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     };
 
     const handleConfirmDeleteRecord = async () => {
-        if (!recordToDelete) return;
+        if (!recordToDelete || !selectedSession) return;
         setLoadingAction(true);
         const { error } = await supabase.from('attendance_records').delete().eq('id', recordToDelete.id);
         setLoadingAction(false);
-        if (error) alert(`Error removing record: ${error.message}`);
-        else {
+        if (error) {
+            alert(`Error removing record: ${error.message}`);
+        } else {
+            setAttendanceHistory(prevHistory =>
+                prevHistory.map(session =>
+                    session.id === selectedSession.id
+                        ? { ...session, records: session.records.filter(r => r.id !== recordToDelete.id) }
+                        : session
+                )
+            );
             setIsDeleteRecordModalOpen(false);
             setRecordToDelete(null);
-            refreshData();
         }
     };
     
     const handleAction = async (action: 'checkout' | 'takeout', recordId: number) => {
         setLoadingAction(true);
         const updateData = action === 'checkout' ? { checkout_timestamp: new Date().toISOString() } : { is_takeout: true };
-        const { error } = await supabase.from('attendance_records').update(updateData).eq('id', recordId);
+        
+        const { data: updatedRecord, error } = await supabase
+            .from('attendance_records')
+            .update(updateData)
+            .eq('id', recordId)
+            .select()
+            .single();
+
         setLoadingAction(false);
-        if (error) alert(`Error updating record: ${error.message}`);
-        else refreshData();
+        if (error) {
+            alert(`Error updating record: ${error.message}`);
+        } else if (updatedRecord && selectedSession) {
+             const updatedFields = {
+                checkout_timestamp: updatedRecord.checkout_timestamp,
+                is_takeout: updatedRecord.is_takeout,
+            };
+            setAttendanceHistory(prevHistory =>
+                prevHistory.map(session =>
+                    session.id === selectedSession.id
+                        ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, ...updatedFields } : r) }
+                        : session
+                )
+            );
+        }
     };
 
     const handleCheckOutAll = async () => {
@@ -323,28 +365,46 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         if (!selectedSession || !manualAddOpsId) return;
         setManualAddError(null);
         setLoadingAction(true);
+
         const worker = workers.find(w => w.opsId.toLowerCase() === manualAddOpsId.toLowerCase());
         if (!worker || !worker.id) {
             setManualAddError(`Worker with OpsID "${manualAddOpsId}" not found.`);
             setLoadingAction(false);
             return;
         }
-        if (selectedSession.records.some(r => r.workerId === worker.id)) {
-            setManualAddError(`Worker ${worker.fullName} is already in this session.`);
-            setLoadingAction(false);
-            return;
-        }
-        const { error } = await supabase.from('attendance_records').insert({
+
+        const { data: newRecords, error } = await supabase.from('attendance_records').insert({
             session_id: selectedSession.id,
             worker_id: worker.id,
             timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
             manual_status: manualAddStatus === 'On Plan' ? null : manualAddStatus,
-        });
+        }).select();
+
         setLoadingAction(false);
-        if (error) setManualAddError(`Error adding worker: ${error.message}`);
-        else {
+
+        if (error) {
+            setManualAddError(`Error adding worker: ${error.message}`);
+        } else if (newRecords && newRecords.length > 0) {
+            const newDbRecord = newRecords[0];
+            const newAttendanceRecord: AttendanceRecord = {
+                id: newDbRecord.id,
+                workerId: worker.id,
+                opsId: worker.opsId,
+                fullName: worker.fullName,
+                timestamp: newDbRecord.timestamp,
+                checkout_timestamp: newDbRecord.checkout_timestamp,
+                manual_status: newDbRecord.manual_status,
+                is_takeout: newDbRecord.is_takeout,
+            };
+
+            setAttendanceHistory(prevHistory =>
+                prevHistory.map(session =>
+                    session.id === selectedSession.id
+                        ? { ...session, records: [...session.records, newAttendanceRecord] }
+                        : session
+                )
+            );
             setManualAddOpsId('');
-            refreshData();
         }
     };
     
@@ -469,6 +529,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         <thead className="bg-blue-600 text-white">
                             <tr>
                                 <th className="p-3 font-semibold rounded-tl-lg">Date</th>
+                                <th className="p-3 font-semibold">Divisi</th>
                                 <th className="p-3 font-semibold">Shift</th>
                                 <th className="p-3 font-semibold">Plan</th>
                                 <th className="p-3 font-semibold">Actual</th>
@@ -488,6 +549,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                     return (
                                         <tr key={session.id} className="hover:bg-gray-50">
                                             <td className="p-3">{session.date}</td>
+                                            <td className="p-3">{session.division}</td>
                                             <td className="p-3">{session.shiftTime}</td>
                                             <td className="p-3">{planned}</td>
                                             <td className="p-3">{actual}</td>
@@ -506,7 +568,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={6} className="text-center p-6 text-gray-500">No attendance history found.</td>
+                                    <td colSpan={7} className="text-center p-6 text-gray-500">No attendance history found.</td>
                                 </tr>
                             )}
                         </tbody>
