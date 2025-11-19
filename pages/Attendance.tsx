@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
@@ -152,20 +153,13 @@ const Attendance: React.FC<AttendanceProps> = ({
     setActiveRecords(prev => prev.filter(record => record.workerId !== workerIdToRemove));
   };
   
-  const mppCounter = useMemo(() => {
-    if (!activeSession) return { text: '0', color: 'text-blue-600' };
-    const remaining = activeSession.planMpp - activeRecords.length;
-    if (remaining < 0) return { text: `+${Math.abs(remaining)}`, color: 'text-yellow-600' };
-    return { text: `${remaining}`, color: 'text-blue-600' };
-  }, [activeSession, activeRecords]);
-
   const fulfillmentStatus = useMemo(() => {
-      if (!activeSession) return { text: '', color: '' };
+      if (!activeSession) return { text: '', color: '', bg: '', border: '' };
       const actual = activeRecords.length;
       const planned = activeSession.planMpp;
-      if (actual < planned) return { text: 'GAP', color: 'text-red-600' };
-      if (actual === planned) return { text: 'FULL FILL', color: 'text-green-600' };
-      return { text: 'FULL FILL BUFFER', color: 'text-yellow-600' };
+      if (actual < planned) return { text: 'GAP', color: 'text-red-700', bg: 'bg-red-100', border: 'border-red-200' };
+      if (actual === planned) return { text: 'FULL FILL', color: 'text-green-700', bg: 'bg-green-100', border: 'border-green-200' };
+      return { text: 'FULL FILL BUFFER', color: 'text-yellow-700', bg: 'bg-yellow-100', border: 'border-yellow-200' };
   }, [activeSession, activeRecords]);
 
   const shiftTimeOptions = Array.from({ length: 24 }, (_, i) => {
@@ -181,26 +175,55 @@ const Attendance: React.FC<AttendanceProps> = ({
       <h1 className="text-3xl font-bold text-gray-800">Attendance</h1>
       {activeSession ? (
         <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-white p-4 rounded-lg border border-gray-200 shadow-lg border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
-                <div className="col-span-2 md:col-span-1">
-                    <p className="text-xs text-gray-500">Tanggal Sesi</p>
-                    <p className="font-semibold text-gray-800">{activeSession.date}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-gray-500">Division</p>
-                    <p className="font-semibold text-gray-800">{activeSession.division}</p>
-                </div>
-                 <div className="col-span-2 md:col-span-2">
-                    <p className="text-xs text-gray-500">Shift</p>
-                    <p className="font-semibold text-gray-800 truncate">{activeSession.shiftTime} ({activeSession.shiftId})</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-xs text-gray-500">MPP Counter</p>
-                    <p className={`text-2xl font-bold ${mppCounter.color}`}>{mppCounter.text}</p>
-                </div>
-                <div className="text-center">
-                    <p className="text-xs text-gray-500">Status</p>
-                    <p className={`text-2xl font-bold ${fulfillmentStatus.color}`}>{fulfillmentStatus.text}</p>
+            {/* New Designed Active Session Card */}
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 border-t-4 border-blue-600 p-6 transition-all duration-300 hover:shadow-xl">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-stretch gap-6">
+                    
+                    {/* Left Side: Context Information */}
+                    <div className="flex-grow space-y-4">
+                        <div className="flex flex-col gap-1">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Sesi Aktif</span>
+                            <div className="flex items-baseline gap-3">
+                                <h2 className="text-2xl font-bold text-gray-800">{activeSession.date}</h2>
+                                <span className="text-lg font-medium text-gray-500">|</span>
+                                <h3 className="text-xl font-semibold text-blue-600">{activeSession.division}</h3>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <p className="text-xs text-gray-400 mb-1">Jam Operasional</p>
+                            <p className="text-3xl font-extrabold text-gray-800 tracking-tight">
+                                {activeSession.shiftTime}
+                            </p>
+                            <p className="text-xs text-gray-400 font-mono mt-1 truncate max-w-xl select-all">
+                                ID: {activeSession.shiftId}
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Right Side: KPI & Status */}
+                    <div className="w-full md:w-auto flex flex-col justify-between items-end gap-4 bg-gray-50 p-5 rounded-xl border border-gray-100 min-w-[280px]">
+                        
+                        {/* Status Badge */}
+                        <div className={`w-full text-center px-4 py-2 rounded-lg border ${fulfillmentStatus.bg} ${fulfillmentStatus.border}`}>
+                            <span className={`text-sm font-black tracking-widest uppercase ${fulfillmentStatus.color}`}>
+                                {fulfillmentStatus.text}
+                            </span>
+                        </div>
+
+                        {/* Counter Display */}
+                        <div className="text-right w-full">
+                            <p className="text-xs text-gray-500 font-semibold uppercase mb-1">Kehadiran / Plan</p>
+                            <div className="flex items-baseline justify-end gap-2">
+                                <span className={`text-5xl font-black ${fulfillmentStatus.color} tracking-tighter`}>
+                                    {activeRecords.length}
+                                </span>
+                                <span className="text-2xl text-gray-400 font-medium">
+                                    / {activeSession.planMpp}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

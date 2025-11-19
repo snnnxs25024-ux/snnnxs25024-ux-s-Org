@@ -33,6 +33,7 @@ const generatePeriodicReport = (
   endDate: Date
 ): PeriodicReportData => {
   const attendanceCounts: { [workerId: string]: number } = {};
+  const workerDetails: { [workerId: string]: { opsId: string; fullName: string } } = {};
 
   const relevantSessions = sessions.filter(session => {
     // Use local time for comparison by avoiding 'Z'
@@ -45,6 +46,16 @@ const generatePeriodicReport = (
     for (const record of session.records) {
       if (!record.is_takeout) {
         uniqueWorkerIdsThisDay.add(record.workerId);
+        
+        // Prioritize details from the record itself. 
+        // This fixes issues where a worker might be missing from the 'workers' array 
+        // but exists in the history logs (e.g., deleted workers or ID mismatches).
+        if (!workerDetails[record.workerId] || workerDetails[record.workerId].fullName === 'Unknown') {
+            workerDetails[record.workerId] = {
+                opsId: record.opsId,
+                fullName: record.fullName
+            };
+        }
       }
     }
     uniqueWorkerIdsThisDay.forEach(workerId => {
@@ -53,11 +64,23 @@ const generatePeriodicReport = (
   }
 
   const report = Object.entries(attendanceCounts).map(([workerId, count]) => {
-    const worker = workers.find(w => w.id === workerId);
+    // 1. Try to get details from the attendance records first (most accurate for history)
+    let opsId = workerDetails[workerId]?.opsId;
+    let fullName = workerDetails[workerId]?.fullName;
+
+    // 2. Fallback: Try to look up in the current workers list if record details are missing/unknown
+    if (!opsId || !fullName || fullName === 'Unknown') {
+        const worker = workers.find(w => w.id === workerId);
+        if (worker) {
+            opsId = worker.opsId;
+            fullName = worker.fullName;
+        }
+    }
+
     return {
       workerId,
-      opsId: worker?.opsId || 'N/A',
-      fullName: worker?.fullName || 'Unknown',
+      opsId: opsId || 'N/A',
+      fullName: fullName || 'Unknown',
       attendanceCount: count
     };
   });
