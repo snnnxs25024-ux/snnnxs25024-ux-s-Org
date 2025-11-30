@@ -78,7 +78,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
         </nav>
         <div className="mt-auto text-center text-xs text-gray-400 p-4">
           <p>&copy; {new Date().getFullYear()} Nexus Sunter DC</p>
-          <p>Version 1.0.0</p>
+          <p>Version 1.3.0</p>
         </div>
       </aside>
     </>
