@@ -898,11 +898,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
             
-            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`}>
+            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`} scrollable={false}>
                 {detailReportData && (
-                    <div className="space-y-4">
-                        <p className="font-semibold text-gray-700 text-lg border-b pb-2 mb-2">{detailReportData.period}</p>
-                        <div className="max-h-[60vh] overflow-y-auto border rounded-lg bg-white shadow-sm">
+                    <div className="flex flex-col h-full overflow-hidden">
+                        <div className="shrink-0 border-b pb-2 mb-2">
+                             <p className="font-semibold text-gray-700 text-lg">{detailReportData.period}</p>
+                        </div>
+                        <div className="flex-1 overflow-y-auto border rounded-lg bg-white shadow-sm min-h-0">
                              <ul className="divide-y divide-gray-100">
                                 {detailReportData.dates.length > 0 ? (
                                     detailReportData.dates.map((item, index) => (
@@ -927,9 +929,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 )}
                              </ul>
                         </div>
-                        <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200 mt-2">
-                             <span className="text-gray-600 font-medium">Total Kehadiran</span>
-                             <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
+                        <div className="shrink-0 mt-2">
+                            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200">
+                                 <span className="text-gray-600 font-medium">Total Kehadiran</span>
+                                 <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
+                            </div>
                         </div>
                     </div>
                 )}

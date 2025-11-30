@@ -5,9 +5,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  scrollable?: boolean;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrollable = true }) => {
   if (!isOpen) return null;
 
   return (
@@ -16,10 +17,10 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-200 transform transition-all duration-300 scale-95 animate-scale-in"
+        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-200 transform transition-all duration-300 scale-95 animate-scale-in flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+        <div className="flex justify-between items-center pb-3 border-b border-gray-200 shrink-0">
           <h2 className="text-xl font-semibold text-gray-800">{title}</h2>
           <button
             onClick={onClose}
@@ -31,7 +32,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
             </svg>
           </button>
         </div>
-        <div className="mt-4 max-h-[75vh] overflow-y-auto">{children}</div>
+        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 overflow-hidden flex flex-col min-h-0'}`}>
+            {children}
+        </div>
       </div>
        <style>{`
         @keyframes scale-in {
