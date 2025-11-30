@@ -10,6 +10,7 @@ import ViewIcon from '../components/icons/ViewIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
+import EditIcon from '../components/icons/EditIcon';
 
 
 interface DashboardProps {
@@ -25,6 +26,25 @@ type PeriodicReportData = {
   fullName: string;
   attendanceCount: number;
 }[];
+
+const shiftIdOptions = [
+    'SOCSTROPS0009 Shift 00 00:00 - 09:00', 'SOCSTROPS0110 Shift 01 01:00 - 10:00', 'SOCSTROPS0211 Shift 02 02:00 - 11:00',
+    'SOCSTROPS0312 Shift 03 03:00 - 15:00', 'SOCSTROPS0413 Shift 04 04:00 - 16:00', 'SOCSTROPS0514 Shift 05 05:00 - 17:00',
+    'SOCSTROPS0615 Shift 06 06:00 - 15:00', 'SOCSTROPS0716 Shift 07 07:00 - 19:00', 'SOCSTROPS0817 Shift 08 08:00 - 20:00',
+    'SOCSTROPS0918 Shift 09 09:00 - 18:00', 'SOCSTROPS1019 Shift 10 10:00 - 22:00', 'SOCSTROPS1120 Shift 11 11:00 - 23:00',
+    'SOCSTROPS1221 Shift 12 12:00 - 00:00', 'SOCSTROPS1322 Shift 13 13:00 - 22:00', 'SOCSTROPS1423 Shift 14 14:00 - 02:00',
+    'SOCSTROPS1500 Shift 15 15:00 - 03:00', 'SOCSTROPS1601 Shift 16 16:00 - 04:00', 'SOCSTROPS1702 Shift 17 17:00 - 02:00',
+    'SOCSTROPS1803 Shift 18 18:00 - 06:00', 'SOCSTROPS1904 Shift 19 19:00 - 07:00', 'SOCSTROPS2005 Shift 20 20:00 - 05:00',
+    'SOCSTROPS2106 Shift 21 21:00 - 09:00', 'SOCSTROPS2207 Shift 22 22:00 - 10:00', 'SOCSTROPS2308 Shift 23 23:00 - 08:00',
+];
+
+const shiftTimeOptions = Array.from({ length: 24 }, (_, i) => {
+    const startHour = i;
+    const endHour = (startHour + 9) % 24;
+    const startTime = startHour.toString().padStart(2, '0') + ':00';
+    const endTime = endHour.toString().padStart(2, '0') + ':00';
+    return `${startTime} - ${endTime}`;
+});
 
 const generatePeriodicReport = (
   sessions: AttendanceSession[],
@@ -161,6 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [manualAddError, setManualAddError] = useState<string | null>(null);
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
     const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string }[], total: number } | null>(null);
+    const [isEditingSession, setIsEditingSession] = useState(false);
 
     useEffect(() => {
         if (selectedSession?.id) {
@@ -288,6 +309,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setSelectedSession(session);
         setManualAddError(null);
         setManualAddOpsId('');
+        setIsEditingSession(false);
         setIsManageModalOpen(true);
     };
 
@@ -431,6 +453,39 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         }
     };
     
+    const handleUpdateSession = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!selectedSession) return;
+        setLoadingAction(true);
+        const formData = new FormData(e.currentTarget);
+        const updates = {
+            date: formData.get('date') as string,
+            division: formData.get('division') as string,
+            shiftTime: formData.get('shiftTime') as string,
+            shiftId: formData.get('shiftId') as string,
+            planMpp: parseInt(formData.get('planMpp') as string, 10),
+        };
+
+        const { error } = await supabase
+            .from('attendance_sessions')
+            .update(updates)
+            .eq('id', selectedSession.id);
+
+        setLoadingAction(false);
+
+        if (error) {
+            alert(`Error updating session: ${error.message}`);
+        } else {
+            // Update local state
+            setAttendanceHistory(prev => prev.map(s => 
+                s.id === selectedSession.id ? { ...s, ...updates } : s
+            ));
+            // Update selected session to reflect changes immediately in the view
+            setSelectedSession(prev => prev ? { ...prev, ...updates } : null);
+            setIsEditingSession(false);
+        }
+    };
+
     const currentMonthReports = useMemo(() => {
         const today = new Date();
         const year = today.getFullYear();
@@ -626,6 +681,72 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session">
                 {selectedSession && (
                     <div className="space-y-4">
+                        {isEditingSession ? (
+                            <form onSubmit={handleUpdateSession} className="space-y-4 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
+                                        <input name="date" type="date" defaultValue={selectedSession.date} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Divisi</label>
+                                        <select name="division" defaultValue={selectedSession.division} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option>ASM2</option> <option>CACHE</option> <option>TP SUNTER 1</option>
+                                            <option>TP SUNTER 2</option> <option>INVENTORY</option> <option>RETURN</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift Jam</label>
+                                         <select name="shiftTime" defaultValue={selectedSession.shiftTime} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                             {shiftTimeOptions.map(time => (<option key={time} value={time}>{time}</option>))}
+                                         </select>
+                                    </div>
+                                    <div>
+                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift ID</label>
+                                         <select name="shiftId" defaultValue={selectedSession.shiftId} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            {shiftIdOptions.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
+                                         </select>
+                                    </div>
+                                     <div>
+                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Plan MPP</label>
+                                         <input name="planMpp" type="number" defaultValue={selectedSession.planMpp} min="1" required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2 mt-4">
+                                    <button type="button" onClick={() => setIsEditingSession(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+                                    <button type="submit" disabled={loadingAction} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save Changes</button>
+                                </div>
+                            </form>
+                        ) : (
+                            <div className="flex justify-between items-start bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4 w-full">
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-400 uppercase">Tanggal</p>
+                                        <p className="font-semibold text-gray-800">{selectedSession.date}</p>
+                                    </div>
+                                    <div>
+                                         <p className="text-xs font-bold text-gray-400 uppercase">Divisi</p>
+                                        <p className="font-semibold text-gray-800">{selectedSession.division}</p>
+                                    </div>
+                                     <div>
+                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift</p>
+                                        <p className="font-semibold text-gray-800">{selectedSession.shiftTime}</p>
+                                    </div>
+                                     <div>
+                                         <p className="text-xs font-bold text-gray-400 uppercase">Plan MPP</p>
+                                        <p className="font-semibold text-gray-800">{selectedSession.planMpp}</p>
+                                    </div>
+                                     <div className="col-span-2 md:col-span-4">
+                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift ID</p>
+                                        <p className="text-sm font-mono text-gray-600">{selectedSession.shiftId}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setIsEditingSession(true)} className="ml-4 p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="Edit Session Details">
+                                    <EditIcon />
+                                </button>
+                            </div>
+                        )}
+
                         <div className="overflow-x-auto border rounded-lg">
                             <table className="w-full text-left text-sm">
                                 <thead className="bg-blue-600 text-white">
