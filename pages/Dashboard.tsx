@@ -180,7 +180,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer' | 'On Plan'>('On Plan');
     const [manualAddError, setManualAddError] = useState<string | null>(null);
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
-    const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string }[], total: number } | null>(null);
+    const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string; division: string }[], total: number } | null>(null);
     const [isEditingSession, setIsEditingSession] = useState(false);
 
     useEffect(() => {
@@ -220,8 +220,28 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const fulfillmentPeriod1 = calculateFulfillment(1, 15);
     const fulfillmentPeriod2 = calculateFulfillment(16, 31);
     
+    // Filter attendance history to only show current month
+    const currentMonthHistory = useMemo(() => {
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+
+        return attendanceHistory
+            .filter(session => {
+                const sessionDate = new Date(session.date + 'T00:00:00');
+                return sessionDate.getMonth() === currentMonth && sessionDate.getFullYear() === currentYear;
+            })
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }, [attendanceHistory]);
+
     const downloadReport = (format: 'xlsx' | 'pdf') => {
-        const reportData = attendanceHistory.flatMap(session => 
+        // Use currentMonthHistory for default report, or attendanceHistory if full dump needed. 
+        // Usually report reflects view, so currentMonthHistory is appropriate for "Dashboard Report",
+        // but if user wants full backup, we might use attendanceHistory.
+        // Based on user request to "archive old data", downloading typically happens per month.
+        // Let's use currentMonthHistory for consistency with the visual table.
+        
+        const reportData = currentMonthHistory.flatMap(session => 
             session.records.map(record => ({
                 'Tanggal': session.date,
                 'Divisi': session.division,
@@ -240,14 +260,14 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             const worksheet = XLSX.utils.json_to_sheet(reportData);
             const workbook = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Report');
-            XLSX.writeFile(workbook, 'Absensi_Report.xlsx');
+            XLSX.writeFile(workbook, 'Absensi_Report_Bulan_Ini.xlsx');
         } else {
             const doc = new jsPDF();
             autoTable(doc, {
                 head: [['Tanggal', 'Divisi', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
                 body: reportData.map(Object.values),
             });
-            doc.save('Absensi_Report.pdf');
+            doc.save('Absensi_Report_Bulan_Ini.pdf');
         }
     };
     
@@ -528,11 +548,12 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout))
             .map(session => ({
                 date: session.date,
-                shiftTime: session.shiftTime
+                shiftTime: session.shiftTime,
+                division: session.division
             }))
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
-        const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}`, item])).values());
+        const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}-${item.division}`, item])).values());
 
         setDetailReportData({
             workerName,
@@ -600,7 +621,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
              <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-t-4 border-indigo-500 transition-shadow duration-300 hover:shadow-xl">
                  <div className="p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History</h2>
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History (Bulan Ini)</h2>
                  </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -616,8 +637,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {attendanceHistory.length > 0 ? (
-                                [...attendanceHistory].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((session) => {
+                            {currentMonthHistory.length > 0 ? (
+                                currentMonthHistory.map((session) => {
                                     const actual = session.records.filter(r => !r.is_takeout).length;
                                     const planned = session.planMpp;
                                     let status = 'GAP';
@@ -646,7 +667,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={7} className="text-center p-6 text-gray-500">No attendance history found.</td>
+                                    <td colSpan={7} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -880,26 +901,36 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`}>
                 {detailReportData && (
                     <div className="space-y-4">
-                        <p className="font-semibold text-gray-700">{detailReportData.period}</p>
-                        <div className="max-h-60 overflow-y-auto border rounded-lg">
-                             <ul className="divide-y divide-gray-200">
+                        <p className="font-semibold text-gray-700 text-lg border-b pb-2 mb-2">{detailReportData.period}</p>
+                        <div className="max-h-[60vh] overflow-y-auto border rounded-lg bg-white shadow-sm">
+                             <ul className="divide-y divide-gray-100">
                                 {detailReportData.dates.length > 0 ? (
                                     detailReportData.dates.map((item, index) => (
-                                        <li key={index} className="p-3 flex justify-between items-center">
-                                            <span>
-                                                {new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(item.date + 'T00:00:00'))}
-                                            </span>
-                                            <span className="text-sm font-semibold text-blue-600 bg-blue-100 px-2 py-1 rounded-md">
+                                        <li key={index} className="p-4 flex justify-between items-center hover:bg-blue-50 transition-colors duration-150">
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-gray-800 text-sm">
+                                                    {new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(item.date + 'T00:00:00'))}
+                                                </span>
+                                                <div className="mt-1">
+                                                     <span className="inline-block px-2 py-0.5 text-xs font-bold text-gray-600 bg-gray-200 rounded border border-gray-300 shadow-sm">
+                                                        {item.division}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200">
                                                 {item.shiftTime}
                                             </span>
                                         </li>
                                     ))
                                 ) : (
-                                    <li className="p-3 text-gray-500">Tidak ada catatan kehadiran pada periode ini.</li>
+                                    <li className="p-6 text-center text-gray-500 italic">Tidak ada catatan kehadiran pada periode ini.</li>
                                 )}
                              </ul>
                         </div>
-                        <p className="font-bold text-right pt-2 border-t">Total Kehadiran: {detailReportData.total} Hari Kerja</p>
+                        <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200 mt-2">
+                             <span className="text-gray-600 font-medium">Total Kehadiran</span>
+                             <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
+                        </div>
                     </div>
                 )}
             </Modal>
