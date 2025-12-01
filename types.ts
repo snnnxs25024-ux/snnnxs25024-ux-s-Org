@@ -1,3 +1,4 @@
+
 export interface Worker {
   id?: string;
   opsId: string;
@@ -15,7 +16,8 @@ export interface AttendanceRecord {
   workerId: string;
   opsId: string;
   fullName: string;
-  timestamp: string; // Check-in time
+  timestamp: string; // Check-in time (Official/System based on Shift)
+  scan_timestamp?: string | null; // Actual Scan time (Audit Trail)
   checkout_timestamp?: string | null; // Check-out time
   manual_status?: 'Partial' | 'Buffer' | null; // New field for manual additions
   is_takeout: boolean; // New field for takeout status

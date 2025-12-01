@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -49,7 +50,8 @@ const App: React.FC = () => {
 
         const workersData = await fetchAll('workers', '*');
         const sessionsData = await fetchAll('attendance_sessions', '*');
-        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout');
+        // Added scan_timestamp to the select query
+        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp');
         
         const typedWorkers: Worker[] = workersData.map(w => ({
             ...w,
@@ -89,6 +91,7 @@ const App: React.FC = () => {
                         opsId: worker?.opsId || 'N/A',
                         fullName: worker?.fullName || 'Unknown',
                         timestamp: rec.timestamp,
+                        scan_timestamp: rec.scan_timestamp, // Map the new field
                         checkout_timestamp: rec.checkout_timestamp,
                         manual_status: rec.manual_status,
                         is_takeout: rec.is_takeout,
@@ -129,7 +132,12 @@ const App: React.FC = () => {
     if (loading) {
       return (
         <div className="flex justify-center items-center h-full">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
+          <div className="flex flex-col items-center">
+             <div className="animate-pulse mb-4">
+                 <img src="/favicon/favicon.svg" alt="Nexus Logo" className="h-16 w-16 opacity-80" />
+             </div>
+             <div className="text-gray-500 text-sm font-medium">Memuat data...</div>
+          </div>
         </div>
       );
     }

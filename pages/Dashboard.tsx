@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -28,14 +28,10 @@ type PeriodicReportData = {
 }[];
 
 const shiftIdOptions = [
-    'SOCSTROPS0009 Shift 00 00:00 - 09:00', 'SOCSTROPS0110 Shift 01 01:00 - 10:00', 'SOCSTROPS0211 Shift 02 02:00 - 11:00',
-    'SOCSTROPS0312 Shift 03 03:00 - 15:00', 'SOCSTROPS0413 Shift 04 04:00 - 16:00', 'SOCSTROPS0514 Shift 05 05:00 - 17:00',
-    'SOCSTROPS0615 Shift 06 06:00 - 15:00', 'SOCSTROPS0716 Shift 07 07:00 - 19:00', 'SOCSTROPS0817 Shift 08 08:00 - 20:00',
-    'SOCSTROPS0918 Shift 09 09:00 - 18:00', 'SOCSTROPS1019 Shift 10 10:00 - 22:00', 'SOCSTROPS1120 Shift 11 11:00 - 23:00',
-    'SOCSTROPS1221 Shift 12 12:00 - 00:00', 'SOCSTROPS1322 Shift 13 13:00 - 22:00', 'SOCSTROPS1423 Shift 14 14:00 - 02:00',
-    'SOCSTROPS1500 Shift 15 15:00 - 03:00', 'SOCSTROPS1601 Shift 16 16:00 - 04:00', 'SOCSTROPS1702 Shift 17 17:00 - 02:00',
-    'SOCSTROPS1803 Shift 18 18:00 - 06:00', 'SOCSTROPS1904 Shift 19 19:00 - 07:00', 'SOCSTROPS2005 Shift 20 20:00 - 05:00',
-    'SOCSTROPS2106 Shift 21 21:00 - 09:00', 'SOCSTROPS2207 Shift 22 22:00 - 10:00', 'SOCSTROPS2308 Shift 23 23:00 - 08:00',
+    'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
+    'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
+    'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
+    'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
 
 const shiftTimeOptions = Array.from({ length: 24 }, (_, i) => {
@@ -182,6 +178,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
     const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string; division: string }[], total: number } | null>(null);
     const [isEditingSession, setIsEditingSession] = useState(false);
+    const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
+    const [copyFeedback, setCopyFeedback] = useState<'ops' | 'excel' | null>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (selectedSession?.id) {
@@ -194,6 +193,24 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             }
         }
     }, [attendanceHistory, selectedSession?.id]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsCopyDropdownOpen(false);
+            }
+        };
+
+        if (isCopyDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        } else {
+            document.removeEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isCopyDropdownOpen]);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
@@ -330,6 +347,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setManualAddError(null);
         setManualAddOpsId('');
         setIsEditingSession(false);
+        setIsCopyDropdownOpen(false);
         setIsManageModalOpen(true);
     };
 
@@ -566,7 +584,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-    const handleCopyOpsIds = () => {
+    const handleCopyOpsIdsOnly = () => {
       if (!selectedSession) return;
       const opsIdsToCopy = selectedSession.records
           .filter(record => !record.is_takeout)
@@ -575,14 +593,41 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
       
       if (opsIdsToCopy) {
           navigator.clipboard.writeText(opsIdsToCopy).then(() => {
-              alert(`${opsIdsToCopy.split('\n').length} OpsIDs copied to clipboard!`);
+              setCopyFeedback('ops');
+              setTimeout(() => {
+                  setCopyFeedback(null);
+                  setIsCopyDropdownOpen(false);
+              }, 1500);
           }, (err) => {
-              alert('Failed to copy OpsIDs.');
+              alert('Gagal menyalin OpsIDs.');
               console.error('Copy failed', err);
           });
       } else {
-          alert('No OpsIDs to copy in this session.');
+          alert('Tidak ada OpsID untuk disalin.');
       }
+    };
+
+    const handleCopyExcelFormat = () => {
+        if (!selectedSession) return;
+        const textToCopy = selectedSession.records
+            .filter(record => !record.is_takeout)
+            .map(record => `${record.opsId}\t${record.opsId}\t${selectedSession.shiftId}\tSUNTER DC`)
+            .join('\n');
+        
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                setCopyFeedback('excel');
+                setTimeout(() => {
+                    setCopyFeedback(null);
+                    setIsCopyDropdownOpen(false);
+                }, 1500);
+            }, (err) => {
+                alert('Gagal menyalin data.');
+                console.error('Copy failed', err);
+            });
+        } else {
+            alert('Tidak ada data untuk disalin.');
+        }
     };
 
     return (
@@ -848,9 +893,56 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                            </form>
                         </div>
                         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                            <button onClick={handleCopyOpsIds} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                                <CopyIcon /> Salin OpsID
-                            </button>
+                            <div className="relative" ref={dropdownRef}>
+                                <button 
+                                    onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
+                                    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                                >
+                                    <CopyIcon /> Salin Data
+                                    <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                </button>
+                                {isCopyDropdownOpen && (
+                                    <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
+                                        <button 
+                                            onClick={handleCopyOpsIdsOnly}
+                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
+                                                copyFeedback === 'ops'
+                                                ? 'bg-green-500 text-white font-bold'
+                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                            }`}
+                                        >
+                                            {copyFeedback === 'ops' ? (
+                                                <div className="flex items-center gap-2">
+                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                     Tersalin!
+                                                </div>
+                                            ) : (
+                                                "Salin OpsID Saja"
+                                            )}
+                                        </button>
+                                        <button 
+                                            onClick={handleCopyExcelFormat}
+                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
+                                                copyFeedback === 'excel'
+                                                ? 'bg-green-500 text-white font-bold'
+                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                            }`}
+                                        >
+                                            {copyFeedback === 'excel' ? (
+                                                <div className="flex items-center gap-2">
+                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                     Tersalin!
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    Salin Format Excel
+                                                    <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                             <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
                             </button>

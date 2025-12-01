@@ -25,14 +25,10 @@ const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['d
 };
 
 const shiftIdOptions = [
-    'SOCSTROPS0009 Shift 00 00:00 - 09:00', 'SOCSTROPS0110 Shift 01 01:00 - 10:00', 'SOCSTROPS0211 Shift 02 02:00 - 11:00',
-    'SOCSTROPS0312 Shift 03 03:00 - 15:00', 'SOCSTROPS0413 Shift 04 04:00 - 16:00', 'SOCSTROPS0514 Shift 05 05:00 - 17:00',
-    'SOCSTROPS0615 Shift 06 06:00 - 15:00', 'SOCSTROPS0716 Shift 07 07:00 - 19:00', 'SOCSTROPS0817 Shift 08 08:00 - 20:00',
-    'SOCSTROPS0918 Shift 09 09:00 - 18:00', 'SOCSTROPS1019 Shift 10 10:00 - 22:00', 'SOCSTROPS1120 Shift 11 11:00 - 23:00',
-    'SOCSTROPS1221 Shift 12 12:00 - 00:00', 'SOCSTROPS1322 Shift 13 13:00 - 22:00', 'SOCSTROPS1423 Shift 14 14:00 - 02:00',
-    'SOCSTROPS1500 Shift 15 15:00 - 03:00', 'SOCSTROPS1601 Shift 16 16:00 - 04:00', 'SOCSTROPS1702 Shift 17 17:00 - 02:00',
-    'SOCSTROPS1803 Shift 18 18:00 - 06:00', 'SOCSTROPS1904 Shift 19 19:00 - 07:00', 'SOCSTROPS2005 Shift 20 20:00 - 05:00',
-    'SOCSTROPS2106 Shift 21 21:00 - 09:00', 'SOCSTROPS2207 Shift 22 22:00 - 10:00', 'SOCSTROPS2308 Shift 23 23:00 - 08:00',
+    'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
+    'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
+    'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
+    'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
 
 const Attendance: React.FC<AttendanceProps> = ({ 
@@ -104,9 +100,24 @@ const Attendance: React.FC<AttendanceProps> = ({
           return;
       }
 
+      // --- LOGIKA PENGUNCIAN WAKTU SESI ---
+      // 1. Ambil Jam Shift Awal (misal: "00:00")
+      const shiftStartTime = activeSession.shiftTime.split(' - ')[0]; // "HH:mm"
+      // 2. Buat objek Date berdasarkan Tanggal Sesi + Jam Shift
+      const sessionDateIso = activeSession.date + 'T' + shiftStartTime;
+      const officialTimestamp = new Date(sessionDateIso).toISOString();
+      
+      // 3. Waktu Aktual saat Scan (Audit Trail)
+      const actualScanTimestamp = new Date().toISOString();
+
       const newRecord: Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'> = {
-          workerId: worker.id, opsId: worker.opsId, fullName: worker.fullName, timestamp: new Date().toISOString(),
+          workerId: worker.id,
+          opsId: worker.opsId,
+          fullName: worker.fullName,
+          timestamp: officialTimestamp, // Official Time (Locked to Session)
+          scan_timestamp: actualScanTimestamp // Audit Time (Real-time)
       };
+      
       setActiveRecords(prev => [newRecord, ...prev]);
       setError(null);
       setOpsIdInput('');
@@ -123,7 +134,15 @@ const Attendance: React.FC<AttendanceProps> = ({
                 shiftTime: activeSession.shiftTime, shiftId: activeSession.shiftId, planMpp: activeSession.planMpp
             });
             if (sessionError) throw sessionError;
-            const recordsToInsert = activeRecords.map(rec => ({ session_id: newSessionId, worker_id: rec.workerId, timestamp: rec.timestamp }));
+            
+            // Map records to include the official timestamp AND the actual scan timestamp
+            const recordsToInsert = activeRecords.map(rec => ({ 
+                session_id: newSessionId, 
+                worker_id: rec.workerId, 
+                timestamp: rec.timestamp, // Official
+                scan_timestamp: rec.scan_timestamp // Actual
+            }));
+            
             const { error: recordsError } = await supabase.from('attendance_records').insert(recordsToInsert);
             if (recordsError) throw recordsError;
         }
@@ -191,7 +210,7 @@ const Attendance: React.FC<AttendanceProps> = ({
                         </div>
                         
                         <div>
-                            <p className="text-xs text-gray-400 mb-1">Jam Operasional</p>
+                            <p className="text-xs text-gray-400 mb-1">Jam Operasional (Patokan Sistem)</p>
                             <p className="text-3xl font-extrabold text-gray-800 tracking-tight">
                                 {activeSession.shiftTime}
                             </p>
@@ -250,6 +269,7 @@ const Attendance: React.FC<AttendanceProps> = ({
                                 <th className="p-3 font-semibold rounded-tl-lg">OpsID</th>
                                 <th className="p-3 font-semibold">Nama Lengkap</th>
                                 <th className="p-3 font-semibold">Shift Jam Masuk</th>
+                                <th className="p-3 font-semibold">Jam Scan (Aktual)</th>
                                 <th className="p-3 font-semibold">Status</th>
                                 <th className="p-3 font-semibold text-center rounded-tr-lg">Hapus</th>
                             </tr>
@@ -259,7 +279,13 @@ const Attendance: React.FC<AttendanceProps> = ({
                                 <tr key={record.workerId} className="hover:bg-gray-50">
                                     <td className="p-3">{record.opsId}</td>
                                     <td className="p-3">{record.fullName}</td>
-                                    <td className="p-3">{activeSession.shiftTime.split(' - ')[0]}</td>
+                                    <td className="p-3">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
+                                    <td className="p-3 font-mono text-gray-500">
+                                        {record.scan_timestamp 
+                                            ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                                            : '-'
+                                        }
+                                    </td>
                                     <td className="p-3 text-green-600 font-semibold">Hadir</td>
                                     <td className="p-3 text-center">
                                       <button onClick={() => handleRemoveActiveRecord(record.workerId)} className="text-red-500 hover:text-red-700 transition-colors p-1" aria-label={`Remove ${record.fullName}`}>
