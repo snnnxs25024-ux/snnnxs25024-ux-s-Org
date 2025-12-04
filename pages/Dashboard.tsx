@@ -611,7 +611,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         if (!selectedSession) return;
         const textToCopy = selectedSession.records
             .filter(record => !record.is_takeout)
-            .map(record => `${record.opsId}\t${record.opsId}\t${selectedSession.shiftId}\tSUNTER DC`)
+            .map(record => `${record.opsId}\t\t${selectedSession.shiftId}\tSUNTER DC`)
             .join('\n');
         
         if (textToCopy) {
