@@ -56,19 +56,19 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       restoreSession();
   }, []);
 
-  // Poll for live updates when session is active
+  // Realtime updates replacing polling
   useEffect(() => {
-    let interval: any;
-    if (activeSession) {
-      const fetchLiveRecords = async () => {
-        const { data, error } = await supabase
+    if (!activeSession) return;
+
+    // 1. Initial Load of Records
+    const fetchLiveRecords = async () => {
+        const { data } = await supabase
           .from('attendance_records')
           .select('*')
           .eq('session_id', activeSession.id)
           .order('timestamp', { ascending: false });
 
         if (data) {
-           // Enrich with worker names
            const enrichedData = data.map((rec: any) => {
                const worker = workers.find(w => w.id === rec.worker_id);
                return {
@@ -79,13 +79,38 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
            });
            setLiveRecords(enrichedData);
         }
-      };
+    };
+    fetchLiveRecords();
 
-      fetchLiveRecords();
-      interval = setInterval(fetchLiveRecords, 3000); // Poll every 3 seconds
-    }
-    return () => clearInterval(interval);
-  }, [activeSession, workers]);
+    // 2. Realtime Subscription
+    const channel = supabase.channel(`open_list_${activeSession.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_records', filter: `session_id=eq.${activeSession.id}` },
+        async (payload) => {
+            if (payload.eventType === 'INSERT') {
+                 const newRecord = payload.new;
+                 const worker = workers.find(w => w.id === newRecord.worker_id);
+                 const enriched = {
+                   ...newRecord,
+                   opsId: worker?.opsId || 'N/A',
+                   fullName: worker?.fullName || 'Unknown'
+                 };
+                 setLiveRecords(prev => [enriched, ...prev]);
+            } else if (payload.eventType === 'UPDATE') {
+                const updated = payload.new;
+                 setLiveRecords(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+            } else if (payload.eventType === 'DELETE') {
+                 setLiveRecords(prev => prev.filter(r => r.id !== payload.old.id));
+            }
+        }
+      )
+      .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [activeSession?.id, workers]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

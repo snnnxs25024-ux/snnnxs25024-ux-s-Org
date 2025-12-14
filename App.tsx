@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -21,6 +21,12 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPublicMode, setIsPublicMode] = useState(false);
+  
+  // Ref to access current workers state inside realtime callbacks without dependency loop
+  const workersRef = useRef<Worker[]>([]);
+  useEffect(() => {
+    workersRef.current = workers;
+  }, [workers]);
   
   // State for auto-opening modal in Dashboard
   const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
@@ -52,7 +58,7 @@ const App: React.FC = () => {
   const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
 
     const fetchData = useCallback(async () => {
-    // Only set loading true on initial load, not background refreshes
+    // Only set loading true on initial load
     if (workers.length === 0) setLoading(true); 
     setError(null);
 
@@ -85,7 +91,6 @@ const App: React.FC = () => {
 
         const workersData = await fetchAll('workers', '*');
         const sessionsData = await fetchAll('attendance_sessions', '*');
-        // Added is_arrived to selection
         const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp, is_arrived');
         
         const typedWorkers: Worker[] = workersData.map(w => ({
@@ -118,6 +123,8 @@ const App: React.FC = () => {
                 shiftTime: session.shiftTime,
                 shiftId: session.shiftId,
                 planMpp: session.planMpp,
+                status: session.status,
+                session_type: session.session_type,
                 records: recordsForSession.map((rec: any) => {
                     const worker = workerMap.get(rec.worker_id);
                     return {
@@ -151,7 +158,7 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, []); // Remove workers dependency to avoid loop, fetchData is now stable
+  }, []); 
 
   // Initial Fetch
   useEffect(() => {
@@ -160,33 +167,95 @@ const App: React.FC = () => {
     } else {
         setLoading(false); 
     }
-  }, [isPublicMode]); // Run once on mount (or public mode change)
+  }, [isPublicMode]); 
 
-  // Realtime Sync Listener
+  // Granular Realtime Sync Listener (No more full refreshes/flickering)
   useEffect(() => {
     if (isPublicMode) return;
 
-    // Listen to changes in DB and refresh local data
     const channel = supabase.channel('global_changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, () => {
-            console.log('Workers updated, refreshing...');
-            fetchData();
+        // --- WORKERS ---
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'workers' }, (payload) => {
+            const newWorker = payload.new as Worker;
+            setWorkers(prev => [...prev, newWorker]);
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_sessions' }, () => {
-            console.log('Sessions updated, refreshing...');
-            fetchData();
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'workers' }, (payload) => {
+            const updated = payload.new as Worker;
+            setWorkers(prev => prev.map(w => w.id === updated.id ? updated : w));
+            // Update names in attendance history instantly
+            setAttendanceHistory(prev => prev.map(s => ({
+                ...s,
+                records: s.records.map(r => r.workerId === updated.id ? { ...r, fullName: updated.fullName, opsId: updated.opsId } : r)
+            })));
         })
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => {
-            console.log('Records updated, refreshing...');
-            fetchData();
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'workers' }, (payload) => {
+             setWorkers(prev => prev.filter(w => w.id !== payload.old.id));
+        })
+
+        // --- SESSIONS ---
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance_sessions' }, (payload) => {
+            const newSession = payload.new as AttendanceSession;
+            setAttendanceHistory(prev => [{ ...newSession, records: [] }, ...prev]);
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'attendance_sessions' }, (payload) => {
+             const updated = payload.new as AttendanceSession;
+             setAttendanceHistory(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'attendance_sessions' }, (payload) => {
+            setAttendanceHistory(prev => prev.filter(s => s.id !== payload.old.id));
+        })
+
+        // --- RECORDS (Surgical updates) ---
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'attendance_records' }, (payload) => {
+            const newRecordDB = payload.new;
+             setAttendanceHistory(prev => prev.map(s => {
+                if (s.id === newRecordDB.session_id) {
+                     const worker = workersRef.current.find(w => w.id === newRecordDB.worker_id);
+                     const enrichedRecord: AttendanceRecord = {
+                         id: newRecordDB.id,
+                         workerId: newRecordDB.worker_id,
+                         opsId: worker?.opsId || 'Unknown',
+                         fullName: worker?.fullName || 'Unknown',
+                         timestamp: newRecordDB.timestamp,
+                         scan_timestamp: newRecordDB.scan_timestamp,
+                         checkout_timestamp: newRecordDB.checkout_timestamp,
+                         manual_status: newRecordDB.manual_status,
+                         is_takeout: newRecordDB.is_takeout,
+                         is_arrived: newRecordDB.is_arrived ?? true
+                     };
+                     // Prevent duplicate if any
+                     if(s.records.some(r => r.id === newRecordDB.id)) return s;
+                     // Add to top of list
+                     return { ...s, records: [enrichedRecord, ...s.records] };
+                }
+                return s;
+             }));
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'attendance_records' }, (payload) => {
+            const updated = payload.new;
+            setAttendanceHistory(prev => prev.map(s => {
+                if (s.id === updated.session_id) {
+                    return {
+                        ...s,
+                        records: s.records.map(r => r.id === updated.id ? { ...r, ...updated, is_arrived: updated.is_arrived ?? r.is_arrived } : r)
+                    };
+                }
+                return s;
+            }));
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'attendance_records' }, (payload) => {
+            const oldRecord = payload.old;
+            setAttendanceHistory(prev => prev.map(s => ({
+                ...s,
+                records: s.records.filter(r => r.id !== oldRecord.id)
+            })));
         })
         .subscribe();
 
     return () => {
         supabase.removeChannel(channel);
     };
-  }, [fetchData, isPublicMode]);
-
+  }, [isPublicMode]); // Only re-subscribe if public mode changes
 
   // If Public Mode, Render Public Component Directly
   if (isPublicMode) {
