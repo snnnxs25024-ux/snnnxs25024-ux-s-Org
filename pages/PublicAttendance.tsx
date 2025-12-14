@@ -9,7 +9,7 @@ const PublicAttendance: React.FC = () => {
   const [opsId, setOpsId] = useState('');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [suggestions, setSuggestions] = useState<Worker[]>([]);
-  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'buffer' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'buffer' | 'error' | 'closed' | 'locked'>('idle');
   const [message, setMessage] = useState('');
   const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
 
@@ -20,14 +20,28 @@ const PublicAttendance: React.FC = () => {
     const id = parts[parts.length - 1];
     setSessionId(id);
 
-    // Fetch Session
+    // 1. Check Device Lock (1 Device 1 Attendance)
+    const lockKey = `nexus_attended_${id}`;
+    if (localStorage.getItem(lockKey)) {
+        setStatus('locked');
+        return;
+    }
+
+    // 2. Fetch Session & Status
     const fetchSession = async () => {
         const { data, error } = await supabase.from('attendance_sessions').select('*').eq('id', id).single();
-        if(data) setSession(data);
-        else setStatus('error');
+        if(data) {
+            setSession(data);
+            if (data.status === 'CLOSED') {
+                setStatus('closed');
+            }
+        } else {
+            setStatus('error');
+            setMessage('Sesi tidak ditemukan.');
+        }
     };
     
-    // Fetch Active Workers for Autocomplete
+    // 3. Fetch Active Workers for Autocomplete
     const fetchWorkers = async () => {
         const { data } = await supabase.from('workers').select('*').eq('status', 'Active');
         if(data) setWorkers(data);
@@ -35,6 +49,24 @@ const PublicAttendance: React.FC = () => {
 
     fetchSession();
     fetchWorkers();
+
+    // 4. Realtime Listener for Session Close
+    const channel = supabase.channel(`public_session_${id}`)
+        .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${id}` },
+            (payload) => {
+                const newSession = payload.new as AttendanceSession;
+                if (newSession.status === 'CLOSED') {
+                    setStatus('closed');
+                }
+            }
+        )
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleSearch = (text: string) => {
@@ -58,6 +90,13 @@ const PublicAttendance: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!session || !opsId) return;
+      
+      // Safety Check for Closed Session
+      if (session.status === 'CLOSED' || status === 'closed') {
+          setStatus('closed');
+          return;
+      }
+      
       setStatus('loading');
 
       // 1. Validate Worker
@@ -68,7 +107,7 @@ const PublicAttendance: React.FC = () => {
           return;
       }
 
-      // 2. Validate Duplicate
+      // 2. Validate Duplicate (Server Check)
       const { data: existing } = await supabase
         .from('attendance_records')
         .select('id')
@@ -76,7 +115,7 @@ const PublicAttendance: React.FC = () => {
         .eq('worker_id', worker.id);
       
       if(existing && existing.length > 0) {
-          setMessage("Anda sudah absen sebelumnya!");
+          setMessage("OpsID ini sudah absen sebelumnya!");
           setStatus('error');
           return;
       }
@@ -97,8 +136,6 @@ const PublicAttendance: React.FC = () => {
       }
 
       // 4. Insert
-      // Timestamp logic: use Session Date + Shift Start Time for consistency, 
-      // but track actual scan time in scan_timestamp
       const shiftStartTime = session.shiftTime.split(' - ')[0];
       const officialTimestamp = new Date(session.date + 'T' + shiftStartTime).toISOString();
       
@@ -114,6 +151,11 @@ const PublicAttendance: React.FC = () => {
           setMessage("Gagal menyimpan data. Coba lagi.");
           setStatus('error');
       } else {
+          // 5. Set Local Lock
+          if (sessionId) {
+              localStorage.setItem(`nexus_attended_${sessionId}`, 'true');
+          }
+          
           setSubmittedData({
               name: worker.fullName,
               time: new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})
@@ -122,9 +164,41 @@ const PublicAttendance: React.FC = () => {
       }
   };
 
+  if (status === 'closed') {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-100">
+              <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-8 border-red-500">
+                   <div className="w-20 h-20 rounded-full bg-red-100 text-red-500 flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  </div>
+                  <h1 className="text-2xl font-bold text-gray-800 mb-2">SESI DITUTUP</h1>
+                  <p className="text-gray-600">
+                      Mohon maaf, sesi absensi ini telah berakhir. Silakan hubungi Leader jika Anda belum absen.
+                  </p>
+              </div>
+          </div>
+      );
+  }
+
+  if (status === 'locked') {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gray-100">
+              <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center border-t-8 border-blue-500">
+                   <div className="w-20 h-20 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                  </div>
+                  <h1 className="text-2xl font-bold text-gray-800 mb-2">SUDAH ABSEN</h1>
+                  <p className="text-gray-600">
+                      Perangkat ini sudah digunakan untuk melakukan absensi pada sesi ini. Terima kasih.
+                  </p>
+              </div>
+          </div>
+      );
+  }
+
   if(!session) {
-      if(status === 'error') return <div className="p-8 text-center text-red-600">Sesi tidak ditemukan atau sudah ditutup.</div>;
-      return <div className="p-8 text-center text-gray-600">Memuat sesi...</div>;
+      if(status === 'error') return <div className="p-8 text-center text-red-600 mt-10">Error: {message}</div>;
+      return <div className="p-8 text-center text-gray-600 mt-10 animate-pulse">Memuat data sesi...</div>;
   }
 
   if (status === 'success' || status === 'buffer') {
@@ -139,11 +213,11 @@ const PublicAttendance: React.FC = () => {
                   </h1>
                   <p className="text-gray-600 mb-6">
                       Halo <strong>{submittedData?.name}</strong>, absen Anda diterima pada jam {submittedData?.time}.
-                      {status === 'buffer' && <span className="block mt-2 text-sm text-yellow-600 font-semibold">Kuota Plan sudah penuh. Mohon tunggu instruksi Leader.</span>}
+                      {status === 'buffer' && <span className="block mt-2 text-sm text-yellow-600 font-semibold">Kuota Plan sudah penuh. Data masuk sebagai Buffer.</span>}
                   </p>
-                  <button onClick={() => { setStatus('idle'); setOpsId(''); setSubmittedData(null); }} className="text-blue-600 font-bold hover:underline">
-                      Absen Karyawan Lain
-                  </button>
+                  <p className="text-xs text-gray-400 mt-4">
+                      Anda tidak dapat menggunakan perangkat ini lagi untuk absen di sesi ini.
+                  </p>
               </div>
           </div>
       );
@@ -202,7 +276,7 @@ const PublicAttendance: React.FC = () => {
               </form>
           </div>
           <div className="bg-gray-50 p-4 text-center text-xs text-gray-400">
-              Pastikan Anda memilih Shift yang benar.
+              Hanya bisa absen 1 kali per perangkat.
           </div>
       </div>
     </div>
