@@ -1,0 +1,212 @@
+
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
+import { AttendanceSession, Worker } from '../types';
+
+const PublicAttendance: React.FC = () => {
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [session, setSession] = useState<AttendanceSession | null>(null);
+  const [opsId, setOpsId] = useState('');
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [suggestions, setSuggestions] = useState<Worker[]>([]);
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'buffer' | 'error'>('idle');
+  const [message, setMessage] = useState('');
+  const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
+
+  useEffect(() => {
+    // Extract ID from URL: /attend/{id}
+    const path = window.location.pathname;
+    const parts = path.split('/');
+    const id = parts[parts.length - 1];
+    setSessionId(id);
+
+    // Fetch Session
+    const fetchSession = async () => {
+        const { data, error } = await supabase.from('attendance_sessions').select('*').eq('id', id).single();
+        if(data) setSession(data);
+        else setStatus('error');
+    };
+    
+    // Fetch Active Workers for Autocomplete
+    const fetchWorkers = async () => {
+        const { data } = await supabase.from('workers').select('*').eq('status', 'Active');
+        if(data) setWorkers(data);
+    };
+
+    fetchSession();
+    fetchWorkers();
+  }, []);
+
+  const handleSearch = (text: string) => {
+      setOpsId(text);
+      if(text.length > 1) {
+          const filtered = workers.filter(w => 
+              w.opsId.toLowerCase().includes(text.toLowerCase()) || 
+              w.fullName.toLowerCase().includes(text.toLowerCase())
+          ).slice(0, 5);
+          setSuggestions(filtered);
+      } else {
+          setSuggestions([]);
+      }
+  };
+
+  const selectWorker = (w: Worker) => {
+      setOpsId(w.opsId);
+      setSuggestions([]);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!session || !opsId) return;
+      setStatus('loading');
+
+      // 1. Validate Worker
+      const worker = workers.find(w => w.opsId.toLowerCase() === opsId.toLowerCase());
+      if(!worker) {
+          setMessage("OpsID tidak ditemukan atau Non-Aktif.");
+          setStatus('error');
+          return;
+      }
+
+      // 2. Validate Duplicate
+      const { data: existing } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('session_id', session.id)
+        .eq('worker_id', worker.id);
+      
+      if(existing && existing.length > 0) {
+          setMessage("Anda sudah absen sebelumnya!");
+          setStatus('error');
+          return;
+      }
+
+      // 3. Check Plan vs Buffer
+      const { count } = await supabase
+        .from('attendance_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id);
+      
+      const currentCount = count || 0;
+      let manualStatus = null;
+      let resultStatus: 'success' | 'buffer' = 'success';
+
+      if (currentCount >= session.planMpp) {
+          manualStatus = 'Buffer';
+          resultStatus = 'buffer';
+      }
+
+      // 4. Insert
+      // Timestamp logic: use Session Date + Shift Start Time for consistency, 
+      // but track actual scan time in scan_timestamp
+      const shiftStartTime = session.shiftTime.split(' - ')[0];
+      const officialTimestamp = new Date(session.date + 'T' + shiftStartTime).toISOString();
+      
+      const { error } = await supabase.from('attendance_records').insert({
+          session_id: session.id,
+          worker_id: worker.id,
+          timestamp: officialTimestamp,
+          scan_timestamp: new Date().toISOString(),
+          manual_status: manualStatus
+      });
+
+      if(error) {
+          setMessage("Gagal menyimpan data. Coba lagi.");
+          setStatus('error');
+      } else {
+          setSubmittedData({
+              name: worker.fullName,
+              time: new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})
+          });
+          setStatus(resultStatus);
+      }
+  };
+
+  if(!session) {
+      if(status === 'error') return <div className="p-8 text-center text-red-600">Sesi tidak ditemukan atau sudah ditutup.</div>;
+      return <div className="p-8 text-center text-gray-600">Memuat sesi...</div>;
+  }
+
+  if (status === 'success' || status === 'buffer') {
+      return (
+          <div className={`min-h-screen flex flex-col items-center justify-center p-4 ${status === 'success' ? 'bg-green-50' : 'bg-yellow-50'}`}>
+              <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md text-center">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${status === 'success' ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                      <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                  </div>
+                  <h1 className={`text-2xl font-bold mb-2 ${status === 'success' ? 'text-green-700' : 'text-yellow-700'}`}>
+                      {status === 'success' ? 'ABSEN BERHASIL!' : 'BERHASIL (BUFFER)'}
+                  </h1>
+                  <p className="text-gray-600 mb-6">
+                      Halo <strong>{submittedData?.name}</strong>, absen Anda diterima pada jam {submittedData?.time}.
+                      {status === 'buffer' && <span className="block mt-2 text-sm text-yellow-600 font-semibold">Kuota Plan sudah penuh. Mohon tunggu instruksi Leader.</span>}
+                  </p>
+                  <button onClick={() => { setStatus('idle'); setOpsId(''); setSubmittedData(null); }} className="text-blue-600 font-bold hover:underline">
+                      Absen Karyawan Lain
+                  </button>
+              </div>
+          </div>
+      );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4 sm:pt-10">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden">
+          <div className="bg-blue-600 p-6 text-white text-center">
+              <h1 className="text-2xl font-bold tracking-wider">ABSENSI NEXUS</h1>
+              <p className="opacity-90 text-sm mt-1">SUNTER DC</p>
+          </div>
+          <div className="p-6">
+              <div className="mb-6 text-center border-b pb-4">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wide">Sesi Aktif</p>
+                  <h2 className="text-xl font-bold text-gray-800 mt-1">{session.division}</h2>
+                  <p className="text-gray-600">{session.date} | {session.shiftTime}</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="relative">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Cari OpsID / Nama</label>
+                      <input 
+                        type="text" 
+                        value={opsId}
+                        onChange={(e) => handleSearch(e.target.value)}
+                        className="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none"
+                        placeholder="Ketik OpsID..."
+                        required
+                      />
+                      {suggestions.length > 0 && (
+                          <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-60 overflow-y-auto">
+                              {suggestions.map(w => (
+                                  <li key={w.id} onClick={() => selectWorker(w)} className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0">
+                                      <p className="font-bold text-gray-800">{w.fullName}</p>
+                                      <p className="text-xs text-gray-500">{w.opsId}</p>
+                                  </li>
+                              ))}
+                          </ul>
+                      )}
+                  </div>
+                  
+                  {status === 'error' && (
+                      <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm border border-red-200">
+                          {message}
+                      </div>
+                  )}
+
+                  <button 
+                    type="submit" 
+                    disabled={status === 'loading'}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg text-lg shadow-md transition-transform active:scale-95"
+                  >
+                      {status === 'loading' ? 'Memproses...' : 'ABSEN SEKARANG'}
+                  </button>
+              </form>
+          </div>
+          <div className="bg-gray-50 p-4 text-center text-xs text-gray-400">
+              Pastikan Anda memilih Shift yang benar.
+          </div>
+      </div>
+    </div>
+  );
+};
+
+export default PublicAttendance;

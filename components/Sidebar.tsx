@@ -4,6 +4,7 @@ import { Page } from '../App';
 import DashboardIcon from './icons/DashboardIcon';
 import AttendanceIcon from './icons/AttendanceIcon';
 import DatabaseIcon from './icons/DatabaseIcon';
+import LinkIcon from './icons/LinkIcon';
 
 interface SidebarProps {
   currentPage: Page;
@@ -41,6 +42,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
   const navItems: { label: Page; icon: React.ReactNode }[] = [
     { label: 'Dashboard', icon: <DashboardIcon /> },
     { label: 'Absensi', icon: <AttendanceIcon /> },
+    { label: 'Open List', icon: <LinkIcon /> },
     { label: 'Data Base', icon: <DatabaseIcon /> },
   ];
 
