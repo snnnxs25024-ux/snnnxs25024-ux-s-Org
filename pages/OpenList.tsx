@@ -37,13 +37,14 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   // Try to restore an active OPEN session on mount
   useEffect(() => {
       const restoreSession = async () => {
-          // Find any session created today that is still OPEN
           const today = getTodayString();
+          // Cari sesi OPEN hari ini. Jika ada multiple, ambil yang paling baru dibuat.
           const { data } = await supabase
               .from('attendance_sessions')
               .select('*')
               .eq('status', 'OPEN')
               .eq('date', today)
+              .order('id', { ascending: false }) // Ambil ID terakhir/terbaru
               .limit(1)
               .single();
           
@@ -119,7 +120,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const handleCloseSession = async () => {
       if (!activeSession) return;
       
-      const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini? Link absensi tidak akan bisa digunakan lagi.");
+      const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini?");
       if (!confirmClose) return;
 
       // Update status to CLOSED in DB
@@ -132,9 +133,15 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           alert("Gagal menutup sesi: " + error.message);
           return;
       }
+      
+      const sessionId = activeSession.id;
 
+      // Clear local state
       setActiveSession(null);
       setLiveRecords([]);
+      
+      // REDIRECT KE DASHBOARD dan Buka Modal Manage Session
+      window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
   };
 
   const getPublicLink = () => {

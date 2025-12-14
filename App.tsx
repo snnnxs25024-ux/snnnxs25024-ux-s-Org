@@ -21,12 +21,30 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPublicMode, setIsPublicMode] = useState(false);
+  
+  // State for auto-opening modal in Dashboard
+  const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
 
-  // Check URL for Public Attendance Mode
+  // Check URL for Public Attendance Mode OR Dashboard Redirects
   useEffect(() => {
     const path = window.location.pathname;
+    const searchParams = new URLSearchParams(window.location.search);
+    
     if (path.startsWith('/attend/')) {
         setIsPublicMode(true);
+    } else {
+        // Handle redirect from OpenList closing
+        const pageParam = searchParams.get('page');
+        const manageId = searchParams.get('manageId');
+        
+        if (pageParam === 'Dashboard') {
+            setCurrentPage('Dashboard');
+        }
+        if (manageId) {
+            setAutoOpenSessionId(manageId);
+            // Clean URL without reloading
+            window.history.replaceState({}, '', '/');
+        }
     }
   }, []);
 
@@ -34,7 +52,8 @@ const App: React.FC = () => {
   const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
 
     const fetchData = useCallback(async () => {
-    setLoading(true);
+    // Only set loading true on initial load, not background refreshes
+    if (workers.length === 0) setLoading(true); 
     setError(null);
 
     try {
@@ -52,8 +71,12 @@ const App: React.FC = () => {
 
                 if (error) throw error;
 
-                allData = [...allData, ...data];
-                lastData = data;
+                if (data) {
+                    allData = [...allData, ...data];
+                    lastData = data;
+                } else {
+                    lastData = [];
+                }
                 page++;
             } while (lastData && lastData.length === pageSize);
             
@@ -62,7 +85,8 @@ const App: React.FC = () => {
 
         const workersData = await fetchAll('workers', '*');
         const sessionsData = await fetchAll('attendance_sessions', '*');
-        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp');
+        // Added is_arrived to selection
+        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp, is_arrived');
         
         const typedWorkers: Worker[] = workersData.map(w => ({
             ...w,
@@ -106,6 +130,7 @@ const App: React.FC = () => {
                         checkout_timestamp: rec.checkout_timestamp,
                         manual_status: rec.manual_status,
                         is_takeout: rec.is_takeout,
+                        is_arrived: rec.is_arrived ?? true, // Default to true if null
                     }
                 }),
             };
@@ -113,21 +138,55 @@ const App: React.FC = () => {
         setAttendanceHistory(history);
 
     } catch (err: any) {
-      console.error("Detailed Error:", err);
-      // Error handling logic omitted for brevity as it's same as previous
-      setError(JSON.stringify(err));
+      console.error("Fetch Data Error:", err);
+      let errMsg = "An unexpected error occurred.";
+      if (err instanceof Error) {
+          errMsg = err.message;
+      } else if (typeof err === 'object' && err !== null) {
+          errMsg = err.message || err.details || JSON.stringify(err);
+      } else if (typeof err === 'string') {
+          errMsg = err;
+      }
+      setError(errMsg);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // Remove workers dependency to avoid loop, fetchData is now stable
 
+  // Initial Fetch
   useEffect(() => {
     if (!isPublicMode) {
         fetchData();
     } else {
-        setLoading(false); // Stop main loading if in public mode
+        setLoading(false); 
     }
+  }, [isPublicMode]); // Run once on mount (or public mode change)
+
+  // Realtime Sync Listener
+  useEffect(() => {
+    if (isPublicMode) return;
+
+    // Listen to changes in DB and refresh local data
+    const channel = supabase.channel('global_changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, () => {
+            console.log('Workers updated, refreshing...');
+            fetchData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_sessions' }, () => {
+            console.log('Sessions updated, refreshing...');
+            fetchData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => {
+            console.log('Records updated, refreshing...');
+            fetchData();
+        })
+        .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
   }, [fetchData, isPublicMode]);
+
 
   // If Public Mode, Render Public Component Directly
   if (isPublicMode) {
@@ -149,15 +208,33 @@ const App: React.FC = () => {
     }
     if (error) {
        return (
-        <div className="flex flex-col justify-center items-center h-full p-4">
-           <p className="text-red-500">Error loading data. Check console.</p>
+        <div className="flex flex-col justify-center items-center h-full p-4 bg-gray-50 rounded-xl">
+           <div className="text-center p-8 bg-white rounded-xl shadow-lg border border-red-100 max-w-md">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-500">
+                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                </div>
+                <h2 className="text-xl font-bold text-gray-800 mb-2">Terjadi Kesalahan</h2>
+                <p className="text-gray-600 mb-6 font-mono text-sm break-words bg-gray-50 p-3 rounded border overflow-auto max-h-40">{error}</p>
+                <button 
+                    onClick={() => { setError(null); fetchData(); }}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors shadow-md"
+                >
+                    Coba Lagi
+                </button>
+           </div>
         </div>
       );
     }
 
     switch (currentPage) {
       case 'Dashboard':
-        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} setAttendanceHistory={setAttendanceHistory} />;
+        return <Dashboard 
+                  workers={workers} 
+                  attendanceHistory={attendanceHistory} 
+                  refreshData={fetchData} 
+                  setAttendanceHistory={setAttendanceHistory}
+                  autoOpenSessionId={autoOpenSessionId} // Pass auto-open ID
+               />;
       case 'Absensi':
         return <Attendance 
                   workers={workers} 
@@ -172,7 +249,13 @@ const App: React.FC = () => {
       case 'Data Base':
         return <Database workers={workers} refreshData={fetchData} />;
       default:
-        return <Dashboard workers={workers} attendanceHistory={attendanceHistory} refreshData={fetchData} setAttendanceHistory={setAttendanceHistory} />;
+        return <Dashboard 
+                  workers={workers} 
+                  attendanceHistory={attendanceHistory} 
+                  refreshData={fetchData} 
+                  setAttendanceHistory={setAttendanceHistory} 
+                  autoOpenSessionId={autoOpenSessionId}
+                />;
     }
   };
 
@@ -184,8 +267,8 @@ const App: React.FC = () => {
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
       />
-      <main className="flex-1 flex flex-col">
-        <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
            <div>
               <h1 className="text-lg font-bold text-blue-600">ABSENSI NEXUS</h1>
               <p className="text-xs text-gray-500">SUNTER DC</p>

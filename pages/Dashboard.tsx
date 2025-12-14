@@ -18,6 +18,7 @@ interface DashboardProps {
     attendanceHistory: AttendanceSession[];
     refreshData: () => void;
     setAttendanceHistory: React.Dispatch<React.SetStateAction<AttendanceSession[]>>;
+    autoOpenSessionId?: string | null;
 }
 
 type PeriodicReportData = {
@@ -26,6 +27,13 @@ type PeriodicReportData = {
   fullName: string;
   attendanceCount: number;
 }[];
+
+// Interface for Summary Stats
+interface SummaryStats {
+    plan: number;
+    actual: number;
+    gap: number;
+}
 
 const shiftIdOptions = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
@@ -138,10 +146,25 @@ const StatCard: React.FC<{ title: string; value: string | number; description: s
     </div>
 );
 
-const SummaryItem: React.FC<{ label: string; value: number; bgColor: string; textColor: string }> = ({ label, value, bgColor, textColor }) => (
-    <div className={`text-center p-4 rounded-lg ${bgColor}`}>
-        <p className={`text-xs uppercase font-semibold ${textColor} opacity-75`}>{label}</p>
-        <p className={`text-2xl font-bold ${textColor}`}>{value}</p>
+const SummaryItem: React.FC<{ label: string; stats: SummaryStats; bgColor: string; textColor: string }> = ({ label, stats, bgColor, textColor }) => (
+    <div className={`text-center p-3 rounded-lg ${bgColor} flex flex-col justify-between h-full`}>
+        <p className={`text-[10px] md:text-xs uppercase font-extrabold ${textColor} opacity-80 mb-2 tracking-wide`}>{label}</p>
+        <div className="space-y-1">
+            <div className="flex justify-between items-center border-b border-black/10 pb-1">
+                <span className="text-[10px] font-medium opacity-70">Plan</span>
+                <span className={`text-sm font-bold ${textColor}`}>{stats.plan}</span>
+            </div>
+             <div className="flex justify-between items-center border-b border-black/10 pb-1">
+                <span className="text-[10px] font-medium opacity-70">Actual</span>
+                <span className={`text-xl font-bold ${textColor}`}>{stats.actual}</span>
+            </div>
+             <div className="flex justify-between items-center pt-1">
+                <span className="text-[10px] font-medium opacity-70">Gap</span>
+                <span className={`text-sm font-bold ${stats.gap >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {stats.gap > 0 ? `+${stats.gap}` : stats.gap}
+                </span>
+            </div>
+        </div>
     </div>
 );
 
@@ -163,7 +186,7 @@ const calculateWorkDuration = (checkin: string, checkout: string | null | undefi
     return `${hours}j ${minutes}m`;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData, setAttendanceHistory }) => {
+const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData, setAttendanceHistory, autoOpenSessionId }) => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
     const [isDeleteSessionModalOpen, setIsDeleteSessionModalOpen] = useState(false);
@@ -181,6 +204,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState<'ops' | 'excel' | null>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Auto-open modal logic based on prop
+    useEffect(() => {
+        if (autoOpenSessionId && attendanceHistory.length > 0) {
+            const session = attendanceHistory.find(s => s.id === autoOpenSessionId);
+            if (session) {
+                openManageModal(session);
+            }
+        }
+    }, [autoOpenSessionId, attendanceHistory]);
 
     useEffect(() => {
         if (selectedSession?.id) {
@@ -252,12 +285,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     }, [attendanceHistory]);
 
     const downloadReport = (format: 'xlsx' | 'pdf') => {
-        // Use currentMonthHistory for default report, or attendanceHistory if full dump needed. 
-        // Usually report reflects view, so currentMonthHistory is appropriate for "Dashboard Report",
-        // but if user wants full backup, we might use attendanceHistory.
-        // Based on user request to "archive old data", downloading typically happens per month.
-        // Let's use currentMonthHistory for consistency with the visual table.
-        
         const reportData = currentMonthHistory.flatMap(session => 
             session.records.map(record => ({
                 'Tanggal': session.date,
@@ -269,7 +296,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 'Jam Masuk': new Date(record.timestamp).toLocaleTimeString('id-ID'),
                 'Jam Pulang': record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleTimeString('id-ID') : '-',
                 'Total Jam Kerja': calculateWorkDuration(record.timestamp, record.checkout_timestamp),
-                'Status': record.is_takeout ? 'Take Out' : record.manual_status || 'On Plan'
+                'Status': record.is_takeout ? 'Take Out' : record.manual_status || 'On Plan',
+                'Kehadiran Fisik': record.is_arrived ? 'Hadir' : 'Sedang di jalan'
             }))
         );
 
@@ -308,32 +336,58 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         endOfWeek.setDate(startOfWeek.getDate() + 6);
         endOfWeek.setHours(23, 59, 59, 999);
 
-        const counts = { today: 0, thisWeek: 0, thisMonth: 0, period1: 0, period2: 0 };
+        // Initial Stats Structure
+        const counts: { 
+            today: SummaryStats, 
+            thisWeek: SummaryStats, 
+            thisMonth: SummaryStats, 
+            period1: SummaryStats, 
+            period2: SummaryStats 
+        } = { 
+            today: { plan: 0, actual: 0, gap: 0 }, 
+            thisWeek: { plan: 0, actual: 0, gap: 0 }, 
+            thisMonth: { plan: 0, actual: 0, gap: 0 }, 
+            period1: { plan: 0, actual: 0, gap: 0 }, 
+            period2: { plan: 0, actual: 0, gap: 0 } 
+        };
+
+        const addToStats = (key: keyof typeof counts, planned: number, actual: number) => {
+            counts[key].plan += planned;
+            counts[key].actual += actual;
+        };
 
         attendanceHistory.forEach(session => {
             const sessionDate = new Date(session.date + 'T00:00:00'); 
             if (isNaN(sessionDate.getTime())) return;
             
-            const attendanceCount = session.records.filter(r => !r.is_takeout).length;
+            const planned = session.planMpp || 0;
+            const actual = session.records.filter(r => !r.is_takeout).length;
 
             if (session.date === todayString) {
-                counts.today += attendanceCount;
+                addToStats('today', planned, actual);
             }
 
             if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
-                counts.thisWeek += attendanceCount;
+                 addToStats('thisWeek', planned, actual);
             }
 
             if (sessionDate.getFullYear() === currentYear && sessionDate.getMonth() === currentMonth) {
-                counts.thisMonth += attendanceCount;
+                 addToStats('thisMonth', planned, actual);
                 const dayOfMonth = sessionDate.getDate();
                 if (dayOfMonth <= 15) {
-                    counts.period1 += attendanceCount;
+                     addToStats('period1', planned, actual);
                 } else {
-                    counts.period2 += attendanceCount;
+                     addToStats('period2', planned, actual);
                 }
             }
         });
+
+        // Calculate Gap Final (Actual - Plan)
+        Object.keys(counts).forEach(k => {
+            const key = k as keyof typeof counts;
+            counts[key].gap = counts[key].actual - counts[key].plan;
+        });
+
         return counts;
     }, [attendanceHistory]);
 
@@ -423,6 +477,31 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         }
     };
 
+    // Toggle Arrival Status (Hadir vs Sedang di jalan)
+    const handleToggleArrival = async (recordId: number, currentStatus: boolean) => {
+        const newStatus = !currentStatus;
+        // Optimistic Update
+        if (selectedSession) {
+            setAttendanceHistory(prevHistory =>
+                prevHistory.map(session =>
+                    session.id === selectedSession.id
+                        ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, is_arrived: newStatus } : r) }
+                        : session
+                )
+            );
+        }
+
+        const { error } = await supabase
+            .from('attendance_records')
+            .update({ is_arrived: newStatus })
+            .eq('id', recordId);
+
+        if (error) {
+            alert('Gagal update status: ' + error.message);
+            refreshData(); // Revert on error
+        }
+    };
+
     const handleCheckOutAll = async () => {
         if (!selectedSession) return;
         const now = new Date().getTime();
@@ -461,6 +540,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             worker_id: worker.id,
             timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
             manual_status: manualAddStatus === 'On Plan' ? null : manualAddStatus,
+            is_arrived: false // Manual Add starts as 'Sedang di jalan' usually, let admin check it.
         }).select();
 
         setLoadingAction(false);
@@ -478,6 +558,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 checkout_timestamp: newDbRecord.checkout_timestamp,
                 manual_status: newDbRecord.manual_status,
                 is_takeout: newDbRecord.is_takeout,
+                is_arrived: newDbRecord.is_arrived,
             };
 
             setAttendanceHistory(prevHistory =>
@@ -650,11 +731,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                     <p className="text-sm text-gray-500">{formattedDate}</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <SummaryItem label="Hari Ini" value={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
-                    <SummaryItem label="Minggu Ini" value={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
-                    <SummaryItem label="Bulan Ini" value={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
-                    <SummaryItem label="Periode 1-15" value={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
-                    <SummaryItem label="Periode 16-31" value={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
+                    <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
+                    <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
+                    <SummaryItem label="Bulan Ini" stats={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
+                    <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
+                    <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
                 </div>
             </div>
 
@@ -675,9 +756,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 <th className="p-3 font-semibold rounded-tl-lg">Date</th>
                                 <th className="p-3 font-semibold">Divisi</th>
                                 <th className="p-3 font-semibold">Shift</th>
-                                <th className="p-3 font-semibold">Plan</th>
-                                <th className="p-3 font-semibold">Actual</th>
-                                <th className="p-3 font-semibold">Status</th>
+                                <th className="p-3 font-semibold text-center">Plan</th>
+                                <th className="p-3 font-semibold text-center">Actual</th>
+                                <th className="p-3 font-semibold text-center">Gap</th>
+                                <th className="p-3 font-semibold text-center">Status</th>
                                 <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
                             </tr>
                         </thead>
@@ -686,6 +768,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 currentMonthHistory.map((session) => {
                                     const actual = session.records.filter(r => !r.is_takeout).length;
                                     const planned = session.planMpp;
+                                    const gap = actual - planned;
+                                    
                                     let status = 'GAP';
                                     if (actual === planned) status = 'FULL FILL';
                                     if (actual > planned) status = 'FULL FILL BUFFER';
@@ -695,12 +779,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                             <td className="p-3">{session.date}</td>
                                             <td className="p-3">{session.division}</td>
                                             <td className="p-3">{session.shiftTime}</td>
-                                            <td className="p-3">{planned}</td>
-                                            <td className="p-3">{actual}</td>
-                                            <td className={`p-3 font-semibold ${
-                                                status === 'FULL FILL' ? 'text-green-600' :
-                                                status === 'GAP' ? 'text-red-600' : 'text-yellow-600'
-                                            }`}>{status}</td>
+                                            <td className="p-3 text-center">{planned}</td>
+                                            <td className="p-3 text-center font-bold text-gray-800">{actual}</td>
+                                            <td className={`p-3 text-center font-bold ${gap >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                {gap > 0 ? `+${gap}` : gap}
+                                            </td>
+                                            <td className="p-3 text-center">
+                                                <span className={`px-2 py-1 text-xs rounded-full font-bold ${
+                                                    status === 'FULL FILL' ? 'bg-green-100 text-green-700' :
+                                                    status === 'GAP' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                                                }`}>{status}</span>
+                                            </td>
                                             <td className="p-3">
                                                 <div className="flex justify-center items-center gap-3">
                                                     <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700" aria-label="Manage Session"><ViewIcon /></button>
@@ -712,7 +801,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={7} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
+                                    <td colSpan={8} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
                                 </tr>
                             )}
                         </tbody>
@@ -813,17 +902,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                         )}
 
-                        <div className="overflow-x-auto border rounded-lg">
-                            <table className="w-full text-left text-sm">
-                                <thead className="bg-blue-600 text-white">
+                        <div className="overflow-x-auto border rounded-lg max-h-[400px]">
+                            <table className="w-full text-left text-sm relative">
+                                <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
-                                        <th className="p-2 font-semibold rounded-tl-lg">OpsID</th>
+                                        <th className="p-2 font-semibold">Kehadiran Fisik</th>
+                                        <th className="p-2 font-semibold">OpsID</th>
                                         <th className="p-2 font-semibold">Nama Lengkap</th>
                                         <th className="p-2 font-semibold">Jam Masuk</th>
-                                        <th className="p-2 font-semibold">Jam Pulang</th>
                                         <th className="p-2 font-semibold">Total Jam</th>
-                                        <th className="p-2 font-semibold">Status</th>
-                                        <th className="p-2 font-semibold text-center rounded-tr-lg">Aksi</th>
+                                        <th className="p-2 font-semibold">Status Plan</th>
+                                        <th className="p-2 font-semibold text-center">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
@@ -838,6 +927,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                             isAutoCheckout = true;
                                         }
                                         const isCheckedOut = !!record.checkout_timestamp || isAutoCheckout;
+                                        
+                                        // Status Plan Logic
                                         let statusText = 'On Plan';
                                         let statusColor = 'bg-green-100 text-green-800';
                                         if(record.is_takeout) {
@@ -850,16 +941,28 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                             statusText = 'Buffer';
                                             statusColor = 'bg-yellow-100 text-yellow-800';
                                         }
+                                        
+                                        // Physical Presence Logic
+                                        const isArrived = record.is_arrived ?? true; // Default true if legacy data
 
                                         return (
                                             <tr key={record.id} className={`hover:bg-gray-50 ${record.is_takeout ? 'opacity-60 bg-gray-100' : ''}`}>
+                                                <td className="p-2 text-center">
+                                                    <div className="flex flex-col items-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={isArrived} 
+                                                            onChange={() => handleToggleArrival(record.id, isArrived)}
+                                                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
+                                                        />
+                                                        <span className={`text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded ${isArrived ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
+                                                            {isArrived ? 'HADIR' : 'OTW'}
+                                                        </span>
+                                                    </div>
+                                                </td>
                                                 <td className="p-2">{record.opsId}</td>
                                                 <td className="p-2">{record.fullName}</td>
                                                 <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
-                                                <td className="p-2">
-                                                    {effectiveCheckoutTimeStr ? new Date(effectiveCheckoutTimeStr).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}
-                                                    {isAutoCheckout && <span className="text-xs text-yellow-600 ml-1">(Auto)</span>}
-                                                </td>
                                                 <td className="p-2 font-mono">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
                                                 <td className="p-2"><span className={`px-2 py-1 text-xs rounded-full font-semibold ${statusColor}`}>{statusText}</span></td>
                                                 <td className="p-2">
@@ -890,6 +993,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                        {loadingAction ? '...' : 'Add'}
                                    </button>
                                </div>
+                               <p className="text-xs text-gray-500">Note: Karyawan yang ditambah manual akan berstatus "Sedang di jalan" (OTW). Centang kehadiran fisik jika sudah sampai.</p>
                            </form>
                         </div>
                         <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">

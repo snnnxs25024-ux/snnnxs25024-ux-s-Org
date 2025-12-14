@@ -72,6 +72,7 @@ const PublicAttendance: React.FC = () => {
   const handleSearch = (text: string) => {
       setOpsId(text);
       if(text.length > 1) {
+          // Case-insensitive filtering
           const filtered = workers.filter(w => 
               w.opsId.toLowerCase().includes(text.toLowerCase()) || 
               w.fullName.toLowerCase().includes(text.toLowerCase())
@@ -99,10 +100,12 @@ const PublicAttendance: React.FC = () => {
       
       setStatus('loading');
 
-      // 1. Validate Worker
-      const worker = workers.find(w => w.opsId.toLowerCase() === opsId.toLowerCase());
+      // 1. Validate Worker (Case Insensitive Check)
+      // Ini memperbaiki masalah dimana OpsID "Active" tapi dibilang tidak ditemukan karena beda huruf besar/kecil
+      const worker = workers.find(w => w.opsId.toLowerCase() === opsId.trim().toLowerCase());
+      
       if(!worker) {
-          setMessage("OpsID tidak ditemukan atau Non-Aktif.");
+          setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");
           setStatus('error');
           return;
       }
@@ -144,7 +147,8 @@ const PublicAttendance: React.FC = () => {
           worker_id: worker.id,
           timestamp: officialTimestamp,
           scan_timestamp: new Date().toISOString(),
-          manual_status: manualStatus
+          manual_status: manualStatus,
+          is_arrived: true // Default scan is 'Hadir' physically
       });
 
       if(error) {
@@ -225,8 +229,8 @@ const PublicAttendance: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4 sm:pt-10">
-      <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-hidden">
-          <div className="bg-blue-600 p-6 text-white text-center">
+      <div className="bg-white rounded-xl shadow-lg w-full max-w-md overflow-visible relative"> 
+          <div className="bg-blue-600 p-6 text-white text-center rounded-t-xl">
               <h1 className="text-2xl font-bold tracking-wider">ABSENSI NEXUS</h1>
               <p className="opacity-90 text-sm mt-1">SUNTER DC</p>
           </div>
@@ -247,11 +251,13 @@ const PublicAttendance: React.FC = () => {
                         className="w-full border-2 border-gray-300 rounded-lg p-3 text-lg focus:border-blue-500 focus:outline-none"
                         placeholder="Ketik OpsID..."
                         required
+                        autoComplete="off"
                       />
+                      {/* Fixed Dropdown with proper Scroll and Z-Index */}
                       {suggestions.length > 0 && (
-                          <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-60 overflow-y-auto">
+                          <ul className="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-60 overflow-y-auto">
                               {suggestions.map(w => (
-                                  <li key={w.id} onClick={() => selectWorker(w)} className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0">
+                                  <li key={w.id} onClick={() => selectWorker(w)} className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0 transition-colors">
                                       <p className="font-bold text-gray-800">{w.fullName}</p>
                                       <p className="text-xs text-gray-500">{w.opsId}</p>
                                   </li>
@@ -269,13 +275,13 @@ const PublicAttendance: React.FC = () => {
                   <button 
                     type="submit" 
                     disabled={status === 'loading'}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg text-lg shadow-md transition-transform active:scale-95"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-lg text-lg shadow-md transition-transform active:scale-95 mt-4"
                   >
                       {status === 'loading' ? 'Memproses...' : 'ABSEN SEKARANG'}
                   </button>
               </form>
           </div>
-          <div className="bg-gray-50 p-4 text-center text-xs text-gray-400">
+          <div className="bg-gray-50 p-4 text-center text-xs text-gray-400 rounded-b-xl">
               Hanya bisa absen 1 kali per perangkat.
           </div>
       </div>
