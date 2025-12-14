@@ -297,7 +297,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 'Jam Pulang': record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleTimeString('id-ID') : '-',
                 'Total Jam Kerja': calculateWorkDuration(record.timestamp, record.checkout_timestamp),
                 'Status': record.is_takeout ? 'Take Out' : record.manual_status || 'On Plan',
-                'Kehadiran Fisik': record.is_arrived ? 'Hadir' : 'Sedang di jalan'
+                'Kehadiran Fisik': record.is_arrived ? 'Hadir' : 'Sedang di jalan',
+                'Tipe Sesi': session.session_type || 'MANUAL'
             }))
         );
 
@@ -754,6 +755,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         <thead className="bg-blue-600 text-white">
                             <tr>
                                 <th className="p-3 font-semibold rounded-tl-lg">Date</th>
+                                <th className="p-3 font-semibold">Tipe</th>
                                 <th className="p-3 font-semibold">Divisi</th>
                                 <th className="p-3 font-semibold">Shift</th>
                                 <th className="p-3 font-semibold text-center">Plan</th>
@@ -774,9 +776,20 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                     if (actual === planned) status = 'FULL FILL';
                                     if (actual > planned) status = 'FULL FILL BUFFER';
                                     
+                                    // Session Type Badge logic
+                                    const sessionType = session.session_type || 'MANUAL';
+                                    const sessionTypeColor = sessionType === 'PUBLIC' 
+                                        ? 'bg-purple-100 text-purple-700' 
+                                        : 'bg-gray-100 text-gray-700';
+
                                     return (
                                         <tr key={session.id} className="hover:bg-gray-50">
                                             <td className="p-3">{session.date}</td>
+                                            <td className="p-3">
+                                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${sessionTypeColor}`}>
+                                                    {sessionType}
+                                                </span>
+                                            </td>
                                             <td className="p-3">{session.division}</td>
                                             <td className="p-3">{session.shiftTime}</td>
                                             <td className="p-3 text-center">{planned}</td>
@@ -801,7 +814,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 })
                             ) : (
                                 <tr>
-                                    <td colSpan={8} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
+                                    <td colSpan={9} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
                                 </tr>
                             )}
                         </tbody>

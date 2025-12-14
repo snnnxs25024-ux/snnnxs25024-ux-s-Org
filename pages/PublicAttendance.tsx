@@ -148,7 +148,7 @@ const PublicAttendance: React.FC = () => {
           timestamp: officialTimestamp,
           scan_timestamp: new Date().toISOString(),
           manual_status: manualStatus,
-          is_arrived: true // Default scan is 'Hadir' physically
+          is_arrived: false // Set to FALSE so admin must check it manually in Dashboard
       });
 
       if(error) {
@@ -177,7 +177,7 @@ const PublicAttendance: React.FC = () => {
                   </div>
                   <h1 className="text-2xl font-bold text-gray-800 mb-2">SESI DITUTUP</h1>
                   <p className="text-gray-600">
-                      Mohon maaf, sesi absensi ini telah berakhir. Silakan hubungi Leader jika Anda belum absen.
+                      Mohon maaf, sesi Open List ini telah berakhir. Silakan hubungi Pak Korlap jika Kamu Tidak Kebagian List.
                   </p>
               </div>
           </div>
@@ -216,8 +216,8 @@ const PublicAttendance: React.FC = () => {
                       {status === 'success' ? 'ABSEN BERHASIL!' : 'BERHASIL (BUFFER)'}
                   </h1>
                   <p className="text-gray-600 mb-6">
-                      Halo <strong>{submittedData?.name}</strong>, absen Anda diterima pada jam {submittedData?.time}.
-                      {status === 'buffer' && <span className="block mt-2 text-sm text-yellow-600 font-semibold">Kuota Plan sudah penuh. Data masuk sebagai Buffer.</span>}
+                      Halo <strong>{submittedData?.name}</strong>, absen Anda diterima pada jam {submittedData?.time}, Harap Hadir Ke Tenda 2 Jam Sebelum Jam Masuk Untuk Konfirmasi Kehadiran.
+                      {status === 'buffer' && <span className="block mt-2 text-sm text-yellow-600 font-semibold">Kuota Plan sudah penuh. Ops Kamu masuk sebagai Buffer.</span>}
                   </p>
                   <p className="text-xs text-gray-400 mt-4">
                       Anda tidak dapat menggunakan perangkat ini lagi untuk absen di sesi ini.

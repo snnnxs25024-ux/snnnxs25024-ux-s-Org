@@ -12,7 +12,7 @@ interface OpenListProps {
 
 const shiftIdOptions = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
-    'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
+    'SOCSTROPS0514', 'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
     'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
     'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
@@ -38,13 +38,14 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   useEffect(() => {
       const restoreSession = async () => {
           const today = getTodayString();
-          // Cari sesi OPEN hari ini. Jika ada multiple, ambil yang paling baru dibuat.
+          // Cari sesi OPEN hari ini yang TIPE-nya PUBLIC.
           const { data } = await supabase
               .from('attendance_sessions')
               .select('*')
               .eq('status', 'OPEN')
               .eq('date', today)
-              .order('id', { ascending: false }) // Ambil ID terakhir/terbaru
+              .eq('session_type', 'PUBLIC') // Filter specific for Open List
+              .order('id', { ascending: false })
               .limit(1)
               .single();
           
@@ -101,7 +102,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       shiftTime: formData.get('shiftTime') as string,
       shiftId: formData.get('shiftId') as string,
       planMpp: parseInt(formData.get('planMpp') as string, 10),
-      status: 'OPEN' as const
+      status: 'OPEN' as const,
+      session_type: 'PUBLIC' as const // Explicitly mark as Public
     };
 
     const { error: insertError } = await supabase

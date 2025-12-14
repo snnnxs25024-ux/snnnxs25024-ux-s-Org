@@ -26,7 +26,7 @@ const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['d
 
 const shiftIdOptions = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
-    'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
+    'SOCSTROPS0514', 'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
     'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
     'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
@@ -130,8 +130,13 @@ const Attendance: React.FC<AttendanceProps> = ({
         if(activeRecords.length > 0) {
             const newSessionId = uuidv4();
             const { error: sessionError } = await supabase.from('attendance_sessions').insert({
-                id: newSessionId, date: activeSession.date, division: activeSession.division,
-                shiftTime: activeSession.shiftTime, shiftId: activeSession.shiftId, planMpp: activeSession.planMpp
+                id: newSessionId, 
+                date: activeSession.date, 
+                division: activeSession.division,
+                shiftTime: activeSession.shiftTime, 
+                shiftId: activeSession.shiftId, 
+                planMpp: activeSession.planMpp,
+                session_type: 'MANUAL' // Mark as Manual Admin Session
             });
             if (sessionError) throw sessionError;
             
@@ -191,7 +196,7 @@ const Attendance: React.FC<AttendanceProps> = ({
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-gray-800">Attendance</h1>
+      <h1 className="text-3xl font-bold text-gray-800">Attendance (Manual)</h1>
       {activeSession ? (
         <div className="space-y-6">
             {/* New Designed Active Session Card */}
@@ -309,8 +314,8 @@ const Attendance: React.FC<AttendanceProps> = ({
         </div>
       ) : (
         <div className="text-center py-16">
-          <h2 className="text-2xl text-gray-600 mb-4">No Active Session</h2>
-          <p className="text-gray-500 mb-8">Click the button below to start tracking attendance.</p>
+          <h2 className="text-2xl text-gray-600 mb-4">No Active Manual Session</h2>
+          <p className="text-gray-500 mb-8">Click the button below to start manually tracking attendance.</p>
           <button 
             onClick={() => setIsModalOpen(true)}
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg hover:shadow-blue-500/50"
@@ -320,7 +325,7 @@ const Attendance: React.FC<AttendanceProps> = ({
         </div>
       )}
 
-      <Modal isOpen={isModalOpen && !activeSession} onClose={() => setIsModalOpen(false)} title="Start Attendance Session">
+      <Modal isOpen={isModalOpen && !activeSession} onClose={() => setIsModalOpen(false)} title="Start Manual Attendance Session">
         <form onSubmit={handleStartSession} className="space-y-4">
           <div>
             <label htmlFor="sessionDate" className="block mb-2 text-sm font-medium text-gray-700">Tanggal Sesi</label>
