@@ -30,5 +30,6 @@ export interface AttendanceSession {
   shiftTime: string;
   shiftId: string;
   planMpp: number;
+  status?: 'OPEN' | 'CLOSED'; // New field for session status
   records: AttendanceRecord[];
 }
