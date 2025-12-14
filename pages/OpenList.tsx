@@ -34,6 +34,26 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
+  // Try to restore an active OPEN session on mount
+  useEffect(() => {
+      const restoreSession = async () => {
+          // Find any session created today that is still OPEN
+          const today = getTodayString();
+          const { data } = await supabase
+              .from('attendance_sessions')
+              .select('*')
+              .eq('status', 'OPEN')
+              .eq('date', today)
+              .limit(1)
+              .single();
+          
+          if (data) {
+              setActiveSession({ ...data, records: [] });
+          }
+      };
+      restoreSession();
+  }, []);
+
   // Poll for live updates when session is active
   useEffect(() => {
     let interval: any;
@@ -46,8 +66,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           .order('timestamp', { ascending: false });
 
         if (data) {
-           // Enrich with worker names since DB might only have IDs if joined, but here we keep it simple
-           // In a real join query we'd get names, but let's map manually from props for speed
+           // Enrich with worker names
            const enrichedData = data.map((rec: any) => {
                const worker = workers.find(w => w.id === rec.worker_id);
                return {
@@ -80,7 +99,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       division: formData.get('division') as string,
       shiftTime: formData.get('shiftTime') as string,
       shiftId: formData.get('shiftId') as string,
-      planMpp: parseInt(formData.get('planMpp') as string, 10)
+      planMpp: parseInt(formData.get('planMpp') as string, 10),
+      status: 'OPEN' as const
     };
 
     const { error: insertError } = await supabase
@@ -96,10 +116,23 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     }
   };
 
-  const handleCloseSession = () => {
-      // In a real app, we might update a 'status' column in DB.
-      // For now, we just clear the local state so Admin stops monitoring/sharing.
-      // The session remains in DB as history.
+  const handleCloseSession = async () => {
+      if (!activeSession) return;
+      
+      const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini? Link absensi tidak akan bisa digunakan lagi.");
+      if (!confirmClose) return;
+
+      // Update status to CLOSED in DB
+      const { error } = await supabase
+        .from('attendance_sessions')
+        .update({ status: 'CLOSED' })
+        .eq('id', activeSession.id);
+
+      if (error) {
+          alert("Gagal menutup sesi: " + error.message);
+          return;
+      }
+
       setActiveSession(null);
       setLiveRecords([]);
   };
@@ -173,10 +206,10 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       ) : (
           <div className="space-y-6">
               {/* Active Session Monitor */}
-              <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-6 animate-fade-in">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                       <div>
-                          <span className="bg-green-200 text-green-800 text-xs font-bold px-2 py-1 rounded-full animate-pulse">LIVE</span>
+                          <span className="bg-green-200 text-green-800 text-xs font-bold px-2 py-1 rounded-full animate-pulse">LIVE OPEN</span>
                           <h2 className="text-2xl font-bold text-gray-800 mt-2">Sesi Aktif: {activeSession.division}</h2>
                           <p className="text-gray-600">{activeSession.date} | {activeSession.shiftTime}</p>
                           <p className="text-sm text-gray-500 font-mono mt-1">ID: {activeSession.shiftId}</p>
@@ -189,7 +222,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                                </button>
                            </div>
                            <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-sm">
-                               Tutup Link
+                               Tutup Sesi
                            </button>
                       </div>
                   </div>
