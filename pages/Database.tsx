@@ -1,5 +1,7 @@
-import React, { useState, useRef, useMemo } from 'react';
+
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
+import QRCode from 'qrcode';
 import { Worker } from '../types';
 import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
@@ -23,12 +25,14 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isDeleteAllConfirmOpen, setIsDeleteAllConfirmOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [workerToDelete, setWorkerToDelete] = useState<Worker | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
   const [importResults, setImportResults] = useState<{success: any[], failed: any[]}>({success: [], failed: []});
   const [isImportSummaryOpen, setIsImportSummaryOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const importFileRef = useRef<HTMLInputElement>(null);
 
   const filteredWorkers = useMemo(() => {
@@ -60,6 +64,16 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const openDeleteConfirm = (worker: Worker) => {
     setWorkerToDelete(worker);
     setIsDeleteConfirmOpen(true);
+  }
+
+  const openQrModal = (worker: Worker) => {
+      setSelectedWorker(worker);
+      setQrCodeUrl('');
+      setIsQrModalOpen(true);
+      // Generate QR Code
+      QRCode.toDataURL(worker.opsId, { width: 300, margin: 2 })
+        .then(url => setQrCodeUrl(url))
+        .catch(err => console.error("Error generating QR", err));
   }
 
   const handleSaveWorker = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -320,6 +334,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                       </td>
                       <td className="p-3">
                         <div className="flex justify-center items-center gap-3">
+                          <button onClick={() => openQrModal(worker)} className="text-gray-600 hover:text-black" title="View QR Code">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
+                          </button>
                           <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700"><ViewIcon /></button>
                           <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700"><EditIcon /></button>
                           <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700"><DeleteIcon /></button>
@@ -410,6 +427,37 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             </ul>
           </div>
         </div>
+      </Modal>
+
+      <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
+        {selectedWorker && (
+            <div className="flex flex-col items-center justify-center p-4">
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center">
+                     {qrCodeUrl ? (
+                         <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64" />
+                     ) : (
+                         <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
+                     )}
+                </div>
+                <div className="mt-6 text-center">
+                    <h2 className="text-2xl font-bold text-gray-800">{selectedWorker.fullName}</h2>
+                    <p className="text-lg text-blue-600 font-mono tracking-wider mt-1">{selectedWorker.opsId}</p>
+                    <p className="text-sm text-gray-500 mt-2 font-medium">{selectedWorker.department}</p>
+                </div>
+                <button 
+                    onClick={() => {
+                        const link = document.createElement('a');
+                        link.download = `${selectedWorker.opsId}-qrcode.png`;
+                        link.href = qrCodeUrl;
+                        link.click();
+                    }}
+                    className="mt-6 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"
+                    disabled={!qrCodeUrl}
+                >
+                    <DownloadIcon /> Download QR Image
+                </button>
+            </div>
+        )}
       </Modal>
 
     </div>

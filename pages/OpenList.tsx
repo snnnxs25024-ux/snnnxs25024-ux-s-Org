@@ -10,14 +10,15 @@ interface OpenListProps {
   workers: Worker[];
 }
 
-const shiftIdOptions = [
+// Fallbacks
+const defaultShiftIds = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
     'SOCSTROPS0514', 'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
     'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
     'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
-
-const shiftTimeOptions = Array.from({ length: 24 }, (_, i) => {
+const defaultDivisions = ['ASM2', 'CACHE', 'TP SUNTER 1', 'TP SUNTER 2', 'INVENTORY', 'RETURN'];
+const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
     const startHour = i;
     const endHour = (startHour + 9) % 24;
     const startTime = startHour.toString().padStart(2, '0') + ':00';
@@ -31,6 +32,27 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Dynamic Options
+  const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
+  const [divisionOpts, setDivisionOpts] = useState<string[]>(defaultDivisions);
+  const [shiftTimeOpts, setShiftTimeOpts] = useState<string[]>(defaultShiftTimes);
+
+  useEffect(() => {
+    const fetchMasterOptions = async () => {
+        const { data } = await supabase.from('master_data').select('*');
+        if (data && data.length > 0) {
+            const divs = data.filter(d => d.category === 'DIVISION').map(d => d.value);
+            const times = data.filter(d => d.category === 'SHIFT_TIME').map(d => d.value);
+            const ids = data.filter(d => d.category === 'SHIFT_ID').map(d => d.value);
+            
+            if (divs.length > 0) setDivisionOpts(divs);
+            if (times.length > 0) setShiftTimeOpts(times);
+            if (ids.length > 0) setShiftIdOpts(ids);
+        }
+    };
+    fetchMasterOptions();
+  }, []);
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
@@ -209,20 +231,19 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                     <div>
                         <label className="block mb-2 text-sm font-medium text-gray-700">Divisi</label>
                         <select name="division" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
-                        <option>ASM2</option> <option>CACHE</option> <option>TP SUNTER 1</option>
-                        <option>TP SUNTER 2</option> <option>INVENTORY</option> <option>RETURN</option>
+                          {divisionOpts.map(div => <option key={div} value={div}>{div}</option>)}
                         </select>
                     </div>
                     <div>
                         <label className="block mb-2 text-sm font-medium text-gray-700">Shift Jam</label>
                         <select name="shiftTime" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
-                        {shiftTimeOptions.map(time => (<option key={time} value={time}>{time}</option>))}
+                        {shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}
                         </select>
                     </div>
                     <div>
                         <label className="block mb-2 text-sm font-medium text-gray-700">Shift ID</label>
                         <select name="shiftId" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
-                        {shiftIdOptions.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
+                        {shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
                         </select>
                     </div>
                     <div className="md:col-span-2">

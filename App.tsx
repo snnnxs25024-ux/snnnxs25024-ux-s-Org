@@ -7,11 +7,12 @@ import Attendance from './pages/Attendance';
 import Database from './pages/Database';
 import OpenList from './pages/OpenList'; // Import New Page
 import PublicAttendance from './pages/PublicAttendance'; // Import Public Page
+import Settings from './pages/Settings'; // Import Settings Page
 import { Worker, AttendanceSession, AttendanceRecord } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
 
-export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base';
+export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
@@ -317,6 +318,8 @@ const App: React.FC = () => {
           return <OpenList workers={workers} />;
       case 'Data Base':
         return <Database workers={workers} refreshData={fetchData} />;
+      case 'Pengaturan':
+          return <Settings />;
       default:
         return <Dashboard 
                   workers={workers} 

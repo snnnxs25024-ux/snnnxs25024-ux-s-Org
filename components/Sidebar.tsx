@@ -5,6 +5,7 @@ import DashboardIcon from './icons/DashboardIcon';
 import AttendanceIcon from './icons/AttendanceIcon';
 import DatabaseIcon from './icons/DatabaseIcon';
 import LinkIcon from './icons/LinkIcon';
+import SettingsIcon from './icons/SettingsIcon';
 
 interface SidebarProps {
   currentPage: Page;
@@ -44,6 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
     { label: 'Absensi', icon: <AttendanceIcon /> },
     { label: 'Open List', icon: <LinkIcon /> },
     { label: 'Data Base', icon: <DatabaseIcon /> },
+    { label: 'Pengaturan', icon: <SettingsIcon /> },
   ];
 
   return (
@@ -80,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
         </nav>
         <div className="mt-auto text-center text-xs text-gray-400 p-4">
           <p>&copy; {new Date().getFullYear()} Nexus Sunter DC</p>
-          <p>Version 1.0.0</p>
+          <p>Version 1.1.0</p>
         </div>
       </aside>
     </>

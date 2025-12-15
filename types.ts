@@ -35,3 +35,9 @@ export interface AttendanceSession {
   session_type?: 'MANUAL' | 'PUBLIC'; // Distinguish between Admin Manual session and Open List Public session
   records: AttendanceRecord[];
 }
+
+export interface MasterData {
+    id: number;
+    category: 'DIVISION' | 'SHIFT_TIME' | 'SHIFT_ID';
+    value: string;
+}
