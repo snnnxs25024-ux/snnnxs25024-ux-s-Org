@@ -30,43 +30,46 @@
         background: #2563eb; /* blue-600 */
       }
 
-      /* Print Styling for Thermal Printer */
+      /* Print Styling for Thermal Printer - FIXED */
       @media print {
         @page {
           margin: 0;
           size: auto;
         }
+        
         body {
           background-color: white;
           margin: 0;
           padding: 0;
         }
-        /* Hide everything by default */
+
+        /* Sembunyikan semua elemen di body */
         body * {
           visibility: hidden;
-          height: 0;
-          overflow: hidden;
         }
-        /* Show only the QR printable area */
+
+        /* Tampilkan HANYA container QR dan anak-anaknya */
         #printable-qr, #printable-qr * {
           visibility: visible;
-          height: auto;
-          overflow: visible;
         }
+
+        /* Posisikan container QR di paling atas menutupi yang lain */
         #printable-qr {
           position: absolute;
           left: 0;
           top: 0;
           width: 100%;
+          margin: 0;
           padding: 10px 0;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
-          background: white;
+          background-color: white;
           z-index: 9999;
         }
-        /* Hide elements marked as no-print explicitly */
+
+        /* Pastikan elemen dengan class no-print benar-benar hilang layoutnya */
         .no-print {
           display: none !important;
         }
@@ -105,3 +108,4 @@
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
+    

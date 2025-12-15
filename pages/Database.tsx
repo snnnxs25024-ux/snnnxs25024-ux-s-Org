@@ -492,7 +492,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                     </div>
                 </div>
 
-                <div className="mt-8 flex gap-3 print:hidden">
+                <div className="mt-8 flex gap-3 print:hidden no-print">
                     <button onClick={handlePrintQr} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
                         <PrintIcon /> Print Struk
                     </button>
@@ -500,7 +500,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                         <DownloadIcon /> Save Image
                     </a>
                 </div>
-                <div className="mt-4 text-xs text-gray-400 print:hidden text-center max-w-xs">
+                <div className="mt-4 text-xs text-gray-400 print:hidden text-center max-w-xs no-print">
                     *Klik "Print Struk" untuk mencetak langsung ke printer thermal (58mm/80mm). Pastikan printer sudah terhubung.
                 </div>
             </div>
@@ -511,3 +511,4 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 };
 
 export default Database;
+    
