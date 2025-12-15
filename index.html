@@ -30,83 +30,46 @@
         background: #2563eb; /* blue-600 */
       }
 
-      /* Print Styling for Thermal Printer - OPTIMIZED */
+      /* Print Styling for Thermal Printer - FIXED */
       @media print {
         @page {
-          /* Atur ukuran kertas thermal standard (58mm). 
-             'auto' pada height membuat printer memotong kertas setelah konten selesai. */
-          size: 58mm auto; 
-          margin: 0mm; 
+          margin: 0;
+          size: auto;
         }
         
-        html, body {
-          width: 58mm; /* Paksa lebar body */
+        body {
           background-color: white;
           margin: 0;
           padding: 0;
-          /* Mencegah halaman kosong panjang akibat elemen tersembunyi */
-          height: auto;
-          overflow: hidden; 
         }
 
-        /* Sembunyikan semua elemen default */
+        /* Sembunyikan semua elemen di body */
         body * {
           visibility: hidden;
         }
 
-        /* Tampilkan container QR dan isinya */
+        /* Tampilkan HANYA container QR dan anak-anaknya */
         #printable-qr, #printable-qr * {
           visibility: visible;
         }
 
-        /* Styling area print */
+        /* Posisikan container QR di paling atas menutupi yang lain */
         #printable-qr {
-          position: absolute; /* Lepas dari flow dokumen normal */
+          position: absolute;
           left: 0;
           top: 0;
-          width: 58mm; /* Lebar penuh kertas thermal */
+          width: 100%;
           margin: 0;
-          padding: 5px 0 20px 0; /* Padding bawah untuk space sobekan kertas */
+          padding: 10px 0;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
           background-color: white;
           z-index: 9999;
-          text-align: center;
         }
 
-        /* Fix Gambar Gepeng: Paksa height auto agar rasio terjaga */
-        #printable-qr img {
-          width: 45mm !important; /* Lebar QR pas di kertas 58mm dengan margin */
-          height: auto !important; /* KUNCI: Mencegah gambar gepeng */
-          max-width: 100%;
-          display: block;
-          margin: 5px auto;
-        }
-
-        /* Sesuaikan ukuran font untuk kertas kecil */
-        #printable-qr h1 {
-          font-size: 9pt;
-          font-weight: bold;
-          margin-bottom: 5px;
-          text-transform: uppercase;
-        }
-        
-        #printable-qr h2 {
-          font-size: 11pt;
-          font-weight: 800;
-          margin: 5px 0 2px 0;
-          line-height: 1.2;
-        }
-        
-        #printable-qr p {
-          font-size: 8pt;
-          margin: 0;
-          color: black !important; /* Pastikan hitam pekat */
-        }
-
-        /* Hilangkan elemen no-print */
+        /* Pastikan elemen dengan class no-print benar-benar hilang layoutnya */
         .no-print {
           display: none !important;
         }

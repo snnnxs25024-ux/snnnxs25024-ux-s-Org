@@ -480,7 +480,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                     <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
                     <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
                         {qrCodeUrl ? (
-                            <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64" />
+                            <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64 print:w-48 print:h-48" />
                         ) : (
                             <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
                         )}
