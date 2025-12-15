@@ -6,7 +6,7 @@ export interface Worker {
   nik: string;
   phone: string;
   contractType: 'Daily Worker Vendor - NEXUS';
-  department: 'SOC Operator' | 'Cache' | 'Return' | 'Inventory';
+  department: string;
   createdAt: string;
   status: 'Active' | 'Non Active' | 'Blacklist';
 }

@@ -29,6 +29,48 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #2563eb; /* blue-600 */
       }
+
+      /* Print Styling for Thermal Printer */
+      @media print {
+        @page {
+          margin: 0;
+          size: auto;
+        }
+        body {
+          background-color: white;
+          margin: 0;
+          padding: 0;
+        }
+        /* Hide everything by default */
+        body * {
+          visibility: hidden;
+          height: 0;
+          overflow: hidden;
+        }
+        /* Show only the QR printable area */
+        #printable-qr, #printable-qr * {
+          visibility: visible;
+          height: auto;
+          overflow: visible;
+        }
+        #printable-qr {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          padding: 10px 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: flex-start;
+          background: white;
+          z-index: 9999;
+        }
+        /* Hide elements marked as no-print explicitly */
+        .no-print {
+          display: none !important;
+        }
+      }
     </style>
     <script>
       tailwind.config = {

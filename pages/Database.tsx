@@ -10,6 +10,7 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import UploadIcon from '../components/icons/UploadIcon';
 import AddIcon from '../components/icons/AddIcon';
+import PrintIcon from '../components/icons/PrintIcon';
 import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
 import SearchIcon from '../components/icons/SearchIcon';
@@ -18,6 +19,38 @@ interface DatabaseProps {
   workers: Worker[];
   refreshData: () => void;
 }
+
+// Helper Components
+const InputField = ({ label, name, type = "text", defaultValue, required = false, ...props }: any) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <input 
+      type={type} 
+      name={name} 
+      defaultValue={defaultValue} 
+      required={required}
+      className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      {...props}
+    />
+  </div>
+);
+
+const SelectField = ({ label, name, defaultValue, options, required = false }: any) => (
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <select 
+      name={name} 
+      defaultValue={defaultValue} 
+      required={required}
+      className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">Select {label}</option>
+      {options.map((opt: string) => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  </div>
+);
 
 const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
@@ -32,8 +65,22 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [isImportSummaryOpen, setIsImportSummaryOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [divisionOpts, setDivisionOpts] = useState<string[]>([]);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const importFileRef = useRef<HTMLInputElement>(null);
+
+  // Fetch Divisions for Dropdown & Validation
+  useEffect(() => {
+    const fetchDivisions = async () => {
+        const { data } = await supabase.from('master_data').select('value').eq('category', 'DIVISION').order('value', { ascending: true });
+        if (data && data.length > 0) {
+            setDivisionOpts(data.map(d => d.value));
+        } else {
+            setDivisionOpts(['SOC Operator', 'Cache', 'Return', 'Inventory']);
+        }
+    };
+    fetchDivisions();
+  }, []);
 
   const filteredWorkers = useMemo(() => {
     return workers
@@ -70,22 +117,29 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       setSelectedWorker(worker);
       setQrCodeUrl('');
       setIsQrModalOpen(true);
-      // Generate QR Code
       QRCode.toDataURL(worker.opsId, { width: 300, margin: 2 })
         .then(url => setQrCodeUrl(url))
         .catch(err => console.error("Error generating QR", err));
   }
+
+  const handlePrintQr = () => {
+      window.print();
+  };
 
   const handleSaveWorker = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoadingAction(true);
     const formData = new FormData(e.currentTarget);
     const workerData = {
-        opsId: formData.get('opsId') as string, fullName: formData.get('fullName') as string,
-        nik: formData.get('nik') as string, phone: formData.get('phone') as string,
+        opsId: formData.get('opsId') as string,
+        fullName: formData.get('fullName') as string,
+        nik: formData.get('nik') as string,
+        phone: formData.get('phone') as string,
         contractType: formData.get('contractType') as Worker['contractType'],
-        department: formData.get('department') as Worker['department'], status: formData.get('status') as Worker['status'],
+        department: formData.get('department') as string,
+        status: formData.get('status') as Worker['status'],
     };
+    
     let error;
     if (selectedWorker) {
       const { error: updateError } = await supabase.from('workers').update(workerData).eq('id', selectedWorker.id);
@@ -94,6 +148,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       const { error: insertError } = await supabase.from('workers').insert([{ ...workerData, createdAt: new Date().toISOString() }]);
       error = insertError;
     }
+    
     setLoadingAction(false);
     if (error) alert(`Error saving worker: ${error.message}`);
     else {
@@ -161,7 +216,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         const worksheet = workbook.Sheets[sheetName];
         const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-        const departmentValues: Worker['department'][] = ['SOC Operator', 'Cache', 'Return', 'Inventory'];
+        const departmentValues = divisionOpts;
         const statusValues: Worker['status'][] = ['Active', 'Non Active', 'Blacklist'];
         const existingOpsIds = new Set(workers.map(w => w.opsId.toLowerCase()));
         
@@ -170,31 +225,24 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 
         for (const row of json) {
             const opsId = row.opsId?.toString().trim();
-            if (!opsId) {
-                failedImports.push({ row, reason: "OpsID is missing." });
-                continue;
-            }
-            if (existingOpsIds.has(opsId.toLowerCase())) {
-                failedImports.push({ row, reason: "Duplicate OpsID." });
-                continue;
-            }
-            if (!row.fullName || !row.nik || !row.phone) {
-                 failedImports.push({ row, reason: "Required field is empty." });
-                continue;
-            }
-            if (!departmentValues.includes(row.department)) {
+            if (!opsId) { failedImports.push({ row, reason: "OpsID is missing." }); continue; }
+            if (existingOpsIds.has(opsId.toLowerCase())) { failedImports.push({ row, reason: "Duplicate OpsID." }); continue; }
+            if (!row.fullName || !row.nik || !row.phone) { failedImports.push({ row, reason: "Required field is empty." }); continue; }
+            
+            // Validate against dynamic divisions (case-insensitive)
+            if (!departmentValues.some(d => d.toLowerCase() === row.department?.toLowerCase())) {
                  failedImports.push({ row, reason: `Invalid department: ${row.department}` });
                 continue;
             }
-            if (!statusValues.includes(row.status)) {
-                 failedImports.push({ row, reason: `Invalid status: ${row.status}` });
-                continue;
-            }
+            if (!statusValues.includes(row.status)) { failedImports.push({ row, reason: `Invalid status: ${row.status}` }); continue; }
 
             existingOpsIds.add(opsId.toLowerCase());
+            // Normalize department casing
+            const matchedDept = departmentValues.find(d => d.toLowerCase() === row.department?.toLowerCase()) || row.department;
+
             workersToInsert.push({
                 opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
-                contractType: 'Daily Worker Vendor - NEXUS', department: row.department, status: row.status,
+                contractType: 'Daily Worker Vendor - NEXUS', department: matchedDept, status: row.status,
                 createdAt: new Date().toISOString(),
             });
         }
@@ -210,19 +258,16 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 
                 if (error) {
                     batch.forEach(worker => {
-                        dbSaveFailed.push({ row: worker, reason: `Database error on save: ${error.message}` });
+                        dbSaveFailed.push({ row: worker, reason: `DB Error: ${error.message}` });
                     });
                 } else if (data) {
-                    successfulInserts.push(...batch);
+                    successfulInserts.push(...data);
                 }
             }
         }
 
         setImportResults({ success: successfulInserts, failed: [...failedImports, ...dbSaveFailed] });
-        
-        if (successfulInserts.length > 0) {
-            refreshData();
-        }
+        if (successfulInserts.length > 0) refreshData();
         
         setIsImportSummaryOpen(true);
         setLoadingAction(false);
@@ -293,10 +338,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
               className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="All">All Departments</option>
-              <option value="SOC Operator">SOC Operator</option>
-              <option value="Cache">Cache</option>
-              <option value="Return">Return</option>
-              <option value="Inventory">Inventory</option>
+              {divisionOpts.map(div => <option key={div} value={div}>{div}</option>)}
             </select>
           </div>
         </div>
@@ -354,6 +396,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         </div>
       </div>
       
+      {/* Modals */}
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Worker Details">
         {selectedWorker && (
             <div className="space-y-2 text-gray-600">
@@ -376,7 +419,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <InputField label="NIK" name="nik" defaultValue={selectedWorker?.nik} required />
             <InputField label="No HP" name="phone" defaultValue={selectedWorker?.phone} required />
             <SelectField label="Contract Type" name="contractType" defaultValue={selectedWorker?.contractType} options={['Daily Worker Vendor - NEXUS']} required />
-            <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={['SOC Operator', 'Cache', 'Return', 'Inventory']} required />
+            <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={divisionOpts} required />
             <SelectField label="Status" name="status" defaultValue={selectedWorker?.status} options={['Active', 'Non Active', 'Blacklist']} required />
             <div className="md:col-span-2 pt-4">
                 <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors" disabled={loadingAction}>
@@ -432,52 +475,39 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
         {selectedWorker && (
             <div className="flex flex-col items-center justify-center p-4">
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col items-center">
-                     {qrCodeUrl ? (
-                         <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64" />
-                     ) : (
-                         <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
-                     )}
+                {/* Printable Area Wrapper with ID for CSS targeting */}
+                <div id="printable-qr" className="flex flex-col items-center text-center">
+                    <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
+                    <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
+                        {qrCodeUrl ? (
+                            <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64 print:w-48 print:h-48" />
+                        ) : (
+                            <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
+                        )}
+                    </div>
+                    <div className="mt-6 text-center">
+                        <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{selectedWorker.fullName}</h2>
+                        <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black print:text-lg">{selectedWorker.opsId}</p>
+                        <p className="text-sm text-gray-500 mt-2 print:hidden">{selectedWorker.department}</p>
+                    </div>
                 </div>
-                <div className="mt-6 text-center">
-                    <h2 className="text-2xl font-bold text-gray-800">{selectedWorker.fullName}</h2>
-                    <p className="text-lg text-blue-600 font-mono tracking-wider mt-1">{selectedWorker.opsId}</p>
-                    <p className="text-sm text-gray-500 mt-2 font-medium">{selectedWorker.department}</p>
+
+                <div className="mt-8 flex gap-3 print:hidden">
+                    <button onClick={handlePrintQr} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
+                        <PrintIcon /> Print Struk
+                    </button>
+                    <a href={qrCodeUrl} download={`${selectedWorker.fullName}_QR.png`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
+                        <DownloadIcon /> Save Image
+                    </a>
                 </div>
-                <button 
-                    onClick={() => {
-                        const link = document.createElement('a');
-                        link.download = `${selectedWorker.opsId}-qrcode.png`;
-                        link.href = qrCodeUrl;
-                        link.click();
-                    }}
-                    className="mt-6 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-sm"
-                    disabled={!qrCodeUrl}
-                >
-                    <DownloadIcon /> Download QR Image
-                </button>
+                <div className="mt-4 text-xs text-gray-400 print:hidden text-center max-w-xs">
+                    *Klik "Print Struk" untuk mencetak langsung ke printer thermal (58mm/80mm). Pastikan printer sudah terhubung.
+                </div>
             </div>
         )}
       </Modal>
-
     </div>
   );
 };
-
-const InputField: React.FC<{label: string, name: string, defaultValue?: string, required?: boolean}> = ({label, name, defaultValue, required}) => (
-    <div>
-        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-700">{label}</label>
-        <input type="text" id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-    </div>
-);
-
-const SelectField: React.FC<{label: string, name: string, defaultValue?: string, options: string[], required?: boolean}> = ({label, name, defaultValue, options, required}) => (
-    <div>
-        <label htmlFor={name} className="block mb-2 text-sm font-medium text-gray-700">{label}</label>
-        <select id={name} name={name} defaultValue={defaultValue} required={required} className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500">
-            {options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-        </select>
-    </div>
-);
 
 export default Database;
