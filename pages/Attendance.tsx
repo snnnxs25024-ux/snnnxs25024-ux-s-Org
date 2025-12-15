@@ -104,7 +104,7 @@ const Attendance: React.FC<AttendanceProps> = ({
     }
   };
   
-  const handleScan = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleScan = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!opsIdInput.trim() || !activeSession) return;
 
@@ -127,9 +127,34 @@ const Attendance: React.FC<AttendanceProps> = ({
           }
       }
 
+      // VALIDATION 1: Check Local Buffer (Duplicate in Current Session)
       if (activeRecords.some(r => r.opsId === worker.opsId)) {
           setError(`Worker ${worker.fullName} has already been scanned in this session.`);
           setOpsIdInput('');
+          return;
+      }
+
+      // VALIDATION 2: Check Database for Same Day Attendance (Cross-Session)
+      try {
+          const { data, error } = await supabase
+            .from('attendance_records')
+            .select('id, attendance_sessions!inner(date)')
+            .eq('worker_id', worker.id)
+            .eq('attendance_sessions.date', activeSession.date);
+          
+          if (error) {
+             console.error(error);
+             setError("Error validating attendance history. Please try again.");
+             return;
+          }
+
+          if (data && data.length > 0) {
+              setError(`Worker ${worker.fullName} has already attended a session today (${activeSession.date}).`);
+              setOpsIdInput('');
+              return;
+          }
+      } catch (err) {
+          console.error(err);
           return;
       }
 
@@ -144,7 +169,8 @@ const Attendance: React.FC<AttendanceProps> = ({
           opsId: worker.opsId,
           fullName: worker.fullName,
           timestamp: officialTimestamp, // Official Time (Locked to Session)
-          scan_timestamp: actualScanTimestamp // Audit Time (Real-time)
+          scan_timestamp: actualScanTimestamp, // Audit Time (Real-time)
+          is_arrived: true // Auto-confirm presence for Admin Scans
       };
       
       setActiveRecords(prev => [newRecord, ...prev]);
@@ -174,7 +200,8 @@ const Attendance: React.FC<AttendanceProps> = ({
                 session_id: newSessionId, 
                 worker_id: rec.workerId, 
                 timestamp: rec.timestamp, // Official
-                scan_timestamp: rec.scan_timestamp // Actual
+                scan_timestamp: rec.scan_timestamp, // Actual
+                is_arrived: true // Explicitly true for manual scans
             }));
             
             const { error: recordsError } = await supabase.from('attendance_records').insert(recordsToInsert);
@@ -400,3 +427,4 @@ const Attendance: React.FC<AttendanceProps> = ({
 };
 
 export default Attendance;
+    

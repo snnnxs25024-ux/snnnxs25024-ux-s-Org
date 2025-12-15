@@ -110,15 +110,23 @@ const PublicAttendance: React.FC = () => {
           return;
       }
 
-      // 2. Validate Duplicate (Server Check)
-      const { data: existing } = await supabase
+      // 2. Validate Duplicate & One-Per-Day (Server Check)
+      // Check if worker has attended ANY session on this date
+      const { data: existingDaily, error: checkError } = await supabase
         .from('attendance_records')
-        .select('id')
-        .eq('session_id', session.id)
-        .eq('worker_id', worker.id);
+        .select('id, attendance_sessions!inner(date)')
+        .eq('worker_id', worker.id)
+        .eq('attendance_sessions.date', session.date);
       
-      if(existing && existing.length > 0) {
-          setMessage("OpsID ini sudah absen sebelumnya!");
+      if (checkError) {
+          console.error(checkError);
+          setMessage("Gagal memvalidasi data. Coba lagi.");
+          setStatus('error');
+          return;
+      }
+
+      if(existingDaily && existingDaily.length > 0) {
+          setMessage(`OpsID ini sudah absen pada tanggal ${session.date} (Max 1x per hari).`);
           setStatus('error');
           return;
       }
@@ -290,3 +298,4 @@ const PublicAttendance: React.FC = () => {
 };
 
 export default PublicAttendance;
+    

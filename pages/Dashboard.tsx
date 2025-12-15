@@ -70,12 +70,11 @@ const generatePeriodicReport = (
   for (const session of relevantSessions) {
     const uniqueWorkerIdsThisDay = new Set<string>();
     for (const record of session.records) {
-      if (!record.is_takeout) {
+      // LOGIC UPDATE: Only count if NOT takeout AND IS arrived (Physical Presence)
+      if (!record.is_takeout && record.is_arrived) {
         uniqueWorkerIdsThisDay.add(record.workerId);
         
         // Prioritize details from the record itself. 
-        // This fixes issues where a worker might be missing from the 'workers' array 
-        // but exists in the history logs (e.g., deleted workers or ID mismatches).
         if (!workerDetails[record.workerId] || workerDetails[record.workerId].fullName === 'Unknown') {
             workerDetails[record.workerId] = {
                 opsId: record.opsId,
@@ -90,11 +89,9 @@ const generatePeriodicReport = (
   }
 
   const report = Object.entries(attendanceCounts).map(([workerId, count]) => {
-    // 1. Try to get details from the attendance records first (most accurate for history)
     let opsId = workerDetails[workerId]?.opsId;
     let fullName = workerDetails[workerId]?.fullName;
 
-    // 2. Fallback: Try to look up in the current workers list if record details are missing/unknown
     if (!opsId || !fullName || fullName === 'Unknown') {
         const worker = workers.find(w => w.id === workerId);
         if (worker) {
@@ -284,7 +281,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
         if (relevantSessions.length === 0) return '0%';
         const totalPlanned = relevantSessions.reduce((sum, s) => sum + s.planMpp, 0);
-        const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout).length, 0);
+        // LOGIC UPDATE: Calculate Actual based on is_arrived check
+        const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout && r.is_arrived).length, 0);
         if (totalPlanned === 0) return 'N/A';
         const percentage = (totalActual / totalPlanned) * 100;
         return `${percentage.toFixed(1)}%`;
@@ -385,7 +383,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             if (isNaN(sessionDate.getTime())) return;
             
             const planned = session.planMpp || 0;
-            const actual = session.records.filter(r => !r.is_takeout).length;
+            // LOGIC UPDATE: Actual only counts physical presence (is_arrived)
+            const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
 
             if (session.date === todayString) {
                 addToStats('today', planned, actual);
@@ -559,6 +558,26 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             return;
         }
 
+        // VALIDATION 1: Duplicate in Current Session
+        const alreadyInSession = selectedSession.records.some(r => r.workerId === worker.id);
+        if (alreadyInSession) {
+             setManualAddError(`Worker ${worker.fullName} is already in this session.`);
+             setLoadingAction(false);
+             return;
+        }
+
+        // VALIDATION 2: 1 Attendance Per Day (Cross-Session)
+        const alreadyAttendedToday = attendanceHistory.some(session => 
+            session.date === selectedSession.date && 
+            session.records.some(r => r.workerId === worker.id)
+        );
+
+        if (alreadyAttendedToday) {
+             setManualAddError(`Worker ${worker.fullName} has already attended a session on ${selectedSession.date}. (Max 1x per hari)`);
+             setLoadingAction(false);
+             return;
+        }
+
         const { data: newRecords, error } = await supabase.from('attendance_records').insert({
             session_id: selectedSession.id,
             worker_id: worker.id,
@@ -668,7 +687,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         });
 
         const attendanceDetails = relevantSessions
-            .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout))
+            // LOGIC UPDATE: Filter for Physical Presence in Report Drilldown
+            .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout && record.is_arrived))
             .map(session => ({
                 date: session.date,
                 shiftTime: session.shiftTime,
@@ -692,7 +712,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleCopyOpsIdsOnly = () => {
       if (!selectedSession) return;
       const opsIdsToCopy = selectedSession.records
-          .filter(record => !record.is_takeout)
+          // Copy only present workers
+          .filter(record => !record.is_takeout && record.is_arrived)
           .map(record => record.opsId)
           .join('\n');
       
@@ -708,14 +729,15 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
               console.error('Copy failed', err);
           });
       } else {
-          alert('Tidak ada OpsID untuk disalin.');
+          alert('Tidak ada OpsID yang hadir (dicentang) untuk disalin.');
       }
     };
 
     const handleCopyExcelFormat = () => {
         if (!selectedSession) return;
         const textToCopy = selectedSession.records
-            .filter(record => !record.is_takeout)
+            // Copy only present workers
+            .filter(record => !record.is_takeout && record.is_arrived)
             .map(record => `${record.opsId}\t${record.opsId}\t${selectedSession.shiftId}\tSUNTER DC`)
             .join('\n');
         
@@ -731,7 +753,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 console.error('Copy failed', err);
             });
         } else {
-            alert('Tidak ada data untuk disalin.');
+            alert('Tidak ada data yang hadir (dicentang) untuk disalin.');
         }
     };
 
@@ -791,7 +813,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         <tbody className="divide-y divide-gray-200">
                             {currentMonthHistory.length > 0 ? (
                                 currentMonthHistory.map((session) => {
-                                    const actual = session.records.filter(r => !r.is_takeout).length;
+                                    // LOGIC UPDATE: Actual calculation based on physical presence
+                                    const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
                                     const planned = session.planMpp;
                                     const gap = actual - planned;
                                     
@@ -1174,3 +1197,4 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 };
 
 export default Dashboard;
+    
