@@ -476,8 +476,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         {selectedWorker && (
             <div className="flex flex-col items-center justify-center p-4">
                 {/* Printable Area Wrapper with ID for CSS targeting */}
-                <div id="printable-qr" className="flex flex-col items-center text-center">
-                    <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
+                <div id="printable-qr">
+                    <h1 className="hidden print:block text-black">ABSENSI NEXUS</h1>
                     <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
                         {qrCodeUrl ? (
                             <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64" />
@@ -485,9 +485,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                             <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
                         )}
                     </div>
-                    <div className="mt-6 text-center">
-                        <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{selectedWorker.fullName}</h2>
-                        <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black print:text-lg">{selectedWorker.opsId}</p>
+                    <div className="mt-6 text-center print:mt-2">
+                        <h2 className="text-2xl font-bold text-gray-800 print:text-black">{selectedWorker.fullName}</h2>
+                        <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black">{selectedWorker.opsId}</p>
                         <p className="text-sm text-gray-500 mt-2 print:hidden">{selectedWorker.department}</p>
                     </div>
                 </div>
