@@ -266,221 +266,282 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             }
         }
 
-        setImportResults({ success: successfulInserts, failed: [...failedImports, ...dbSaveFailed] });
-        if (successfulInserts.length > 0) refreshData();
-        
-        setIsImportSummaryOpen(true);
+        setImportResults({
+            success: successfulInserts,
+            failed: [...failedImports, ...dbSaveFailed]
+        });
         setLoadingAction(false);
+        setIsImportSummaryOpen(true);
+        if (successfulInserts.length > 0) refreshData();
+        if (importFileRef.current) importFileRef.current.value = '';
     };
     reader.readAsBinaryString(file);
-    event.target.value = '';
-  };
-
-  const handleCopyOpsIds = () => {
-      const opsIdsToCopy = filteredWorkers.map(worker => worker.opsId).join('\n');
-      if (opsIdsToCopy) {
-          navigator.clipboard.writeText(opsIdsToCopy).then(() => {
-              alert(`${filteredWorkers.length} OpsIDs copied to clipboard!`);
-          }, (err) => {
-              alert('Failed to copy OpsIDs.');
-              console.error('Copy failed', err);
-          });
-      } else {
-          alert('No OpsIDs to copy.');
-      }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-        <h1 className="text-3xl font-bold text-gray-800">Worker Database</h1>
-        <div className="flex flex-wrap gap-2">
-            <button onClick={() => openEditModal(null)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                <AddIcon /> Add New
+        <h1 className="text-3xl font-bold text-gray-800">Database Karyawan</h1>
+        <div className="flex gap-2">
+            <button 
+                onClick={() => openEditModal(null)} 
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all"
+            >
+                <AddIcon /> <span className="hidden sm:inline">Add New</span>
             </button>
-            <button onClick={handleCopyOpsIds} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                <CopyIcon /> Salin OpsID
+            <div className="relative">
+                <button className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all group">
+                    <UploadIcon /> <span className="hidden sm:inline">Import</span>
+                </button>
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 hidden group-hover:block z-10 p-2">
+                    <button onClick={handleDownloadTemplate} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">Download Template</button>
+                    <button onClick={() => importFileRef.current?.click()} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">Select File</button>
+                </div>
+                <input type="file" ref={importFileRef} onChange={handleImport} accept=".xlsx, .xls" className="hidden" />
+            </div>
+            <button onClick={handleExport} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
+                <DownloadIcon /> <span className="hidden sm:inline">Export</span>
             </button>
-            <button onClick={handleDownloadTemplate} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                <DownloadIcon /> Template
-            </button>
-            <button onClick={() => importFileRef.current?.click()} className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md" disabled={loadingAction}>
-                <UploadIcon /> {loadingAction ? 'Importing...' : 'Import'}
-            </button>
-            <input type="file" ref={importFileRef} onChange={handleImport} className="hidden" accept=".xlsx, .xls" />
-            <button onClick={handleExport} className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                <DownloadIcon /> Export
-            </button>
-             <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md">
-                <DeleteIcon /> Delete All
+             <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
+                <DeleteIcon /> <span className="hidden sm:inline">Reset DB</span>
             </button>
         </div>
       </div>
-      
-      <div className="bg-white p-4 rounded-lg shadow-lg border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <span className="absolute inset-y-0 left-0 flex items-center pl-3">
-              <SearchIcon className="h-5 w-5 text-gray-400" />
-            </span>
-            <input 
+
+      <div className="bg-white p-4 rounded-lg shadow border border-gray-200">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex-1 relative">
+             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <SearchIcon className="h-5 w-5 text-gray-400" />
+             </div>
+            <input
               type="text"
               placeholder="Search by OpsID or Name..."
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 pl-10 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div>
-            <select
-              value={departmentFilter}
-              onChange={e => setDepartmentFilter(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="All">All Departments</option>
-              {divisionOpts.map(div => <option key={div} value={div}>{div}</option>)}
-            </select>
-          </div>
+          <select
+            value={departmentFilter}
+            onChange={(e) => setDepartmentFilter(e.target.value)}
+            className="border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="All">All Divisions</option>
+            {divisionOpts.map(div => <option key={div} value={div}>{div}</option>)}
+          </select>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
+      <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="bg-blue-600 text-white">
+            <thead className="bg-Blue-600 text-White uppercase font-semibold">
                 <tr>
-                  <th className="p-3 font-semibold rounded-tl-lg">OpsID</th>
-                  <th className="p-3 font-semibold">Nama Lengkap</th>
-                  <th className="p-3 font-semibold">Departemen</th>
-                  <th className="p-3 font-semibold">Tanggal Dibuat</th>
-                  <th className="p-3 font-semibold">Status</th>
-                  <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
+                <th className="p-4">OpsID</th>
+                <th className="p-4">Full Name</th>
+                <th className="p-4 hidden md:table-cell">Division</th>
+                <th className="p-4 hidden lg:table-cell">Status</th>
+                <th className="p-4 text-center">Actions</th>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filteredWorkers.length > 0 ? (
-                  filteredWorkers.map(worker => (
-                    <tr key={worker.id} className="hover:bg-gray-50">
-                      <td className="p-3">{worker.opsId}</td>
-                      <td className="p-3">{worker.fullName}</td>
-                      <td className="p-3">{worker.department}</td>
-                      <td className="p-3">{new Date(worker.createdAt).toLocaleDateString()}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          worker.status === 'Active' ? 'bg-green-100 text-green-800' : 
-                          worker.status === 'Non Active' ? 'bg-yellow-100 text-yellow-800' : 
-                          'bg-red-100 text-red-800'
-                          }`}>
-                          {worker.status}
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+                {filteredWorkers.map((worker) => (
+                <tr key={worker.id} className="hover:bg-blue-50 transition-colors">
+                    <td className="p-4 font-mono font-medium text-blue-600">{worker.opsId}</td>
+                    <td className="p-4 font-semibold text-gray-800">{worker.fullName}</td>
+                    <td className="p-4 hidden md:table-cell">{worker.department}</td>
+                    <td className="p-4 hidden lg:table-cell">
+                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${worker.status === 'Active' ? 'bg-green-100 text-green-800' : worker.status === 'Blacklist' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {worker.status}
                         </span>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex justify-center items-center gap-3">
-                          <button onClick={() => openQrModal(worker)} className="text-gray-600 hover:text-black" title="View QR Code">
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4h2v-4zM5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>
-                          </button>
-                          <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700"><ViewIcon /></button>
-                          <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700"><EditIcon /></button>
-                          <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700"><DeleteIcon /></button>
-                        </div>
-                      </td>
+                    </td>
+                    <td className="p-4">
+                    <div className="flex justify-center items-center gap-2">
+                        <button onClick={() => openQrModal(worker)} className="text-gray-500 hover:text-black p-1 transition-colors" title="QR Code"><PrintIcon /></button>
+                        <button onClick={() => openViewModal(worker)} className="text-blue-500 hover:text-blue-700 p-1 transition-colors" title="View Details"><ViewIcon /></button>
+                        <button onClick={() => openEditModal(worker)} className="text-yellow-500 hover:text-yellow-700 p-1 transition-colors" title="Edit"><EditIcon /></button>
+                        <button onClick={() => openDeleteConfirm(worker)} className="text-red-500 hover:text-red-700 p-1 transition-colors" title="Delete"><DeleteIcon /></button>
+                    </div>
+                    </td>
+                </tr>
+                ))}
+                {filteredWorkers.length === 0 && (
+                    <tr>
+                        <td colSpan={5} className="p-8 text-center text-gray-500">No workers found matching your criteria.</td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={6} className="text-center p-6 text-gray-500">No workers found matching your criteria.</td>
-                  </tr>
                 )}
-              </tbody>
+            </tbody>
             </table>
         </div>
       </div>
-      
-      {/* Modals */}
+
       <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Worker Details">
         {selectedWorker && (
-            <div className="space-y-2 text-gray-600">
-                <p><strong>OpsID:</strong> {selectedWorker.opsId}</p>
-                <p><strong>Nama Lengkap:</strong> {selectedWorker.fullName}</p>
-                <p><strong>NIK:</strong> {selectedWorker.nik}</p>
-                <p><strong>No HP:</strong> {selectedWorker.phone}</p>
-                <p><strong>Contract Type:</strong> {selectedWorker.contractType}</p>
-                <p><strong>Departemen:</strong> {selectedWorker.department}</p>
-                <p><strong>Tanggal Dibuat:</strong> {new Date(selectedWorker.createdAt).toLocaleString()}</p>
-                <p><strong>Status:</strong> {selectedWorker.status}</p>
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">OpsID</p>
+                    <p className="text-lg font-mono text-blue-700">{selectedWorker.opsId}</p>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">Full Name</p>
+                    <p className="text-lg text-gray-800">{selectedWorker.fullName}</p>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">NIK KTP</p>
+                    <p className="text-gray-700 font-mono">{selectedWorker.nik}</p>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">Phone / WA</p>
+                    <p className="text-gray-700 font-mono">{selectedWorker.phone}</p>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">Department</p>
+                    <p className="text-gray-700">{selectedWorker.department}</p>
+                </div>
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                    <p className="text-xs text-gray-500 uppercase font-bold">Status</p>
+                    <span className={`inline-block mt-1 px-2 py-1 rounded text-sm font-bold ${selectedWorker.status === 'Active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+                        {selectedWorker.status}
+                    </span>
+                </div>
             </div>
+            <div className="flex justify-end pt-4">
+                <button onClick={() => setIsViewModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Close</button>
+            </div>
+          </div>
         )}
       </Modal>
 
-       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={selectedWorker ? "Edit Worker" : "Add New Worker"}>
-        <form onSubmit={handleSaveWorker} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <InputField label="OpsID" name="opsId" defaultValue={selectedWorker?.opsId} required />
-            <InputField label="Nama Lengkap" name="fullName" defaultValue={selectedWorker?.fullName} required />
-            <InputField label="NIK" name="nik" defaultValue={selectedWorker?.nik} required />
-            <InputField label="No HP" name="phone" defaultValue={selectedWorker?.phone} required />
-            <SelectField label="Contract Type" name="contractType" defaultValue={selectedWorker?.contractType} options={['Daily Worker Vendor - NEXUS']} required />
-            <SelectField label="Departemen" name="department" defaultValue={selectedWorker?.department} options={divisionOpts} required />
-            <SelectField label="Status" name="status" defaultValue={selectedWorker?.status} options={['Active', 'Non Active', 'Blacklist']} required />
-            <div className="md:col-span-2 pt-4">
-                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors" disabled={loadingAction}>
+      <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={selectedWorker ? "Edit Worker" : "Add New Worker"}>
+        <form onSubmit={handleSaveWorker} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <InputField label="OpsID" name="opsId" defaultValue={selectedWorker?.opsId} required placeholder="e.g. NEX001" />
+                <InputField label="Full Name" name="fullName" defaultValue={selectedWorker?.fullName} required placeholder="e.g. John Doe" />
+                <InputField label="NIK KTP" name="nik" defaultValue={selectedWorker?.nik} required type="number" placeholder="16 digits" />
+                <InputField label="Phone Number" name="phone" defaultValue={selectedWorker?.phone} required type="tel" placeholder="e.g. 0812..." />
+                
+                <SelectField 
+                    label="Contract Type" 
+                    name="contractType" 
+                    defaultValue={selectedWorker?.contractType || "Daily Worker Vendor - NEXUS"} 
+                    options={["Daily Worker Vendor - NEXUS"]} 
+                    required 
+                />
+                
+                <SelectField 
+                    label="Division" 
+                    name="department" 
+                    defaultValue={selectedWorker?.department} 
+                    options={divisionOpts} 
+                    required 
+                />
+
+                <SelectField 
+                    label="Status" 
+                    name="status" 
+                    defaultValue={selectedWorker?.status || "Active"} 
+                    options={["Active", "Non Active", "Blacklist"]} 
+                    required 
+                />
+            </div>
+            <div className="flex justify-end gap-3 pt-4 mt-4 border-t border-gray-100">
+                <button type="button" onClick={() => setIsEditModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium transition-colors">Cancel</button>
+                <button type="submit" disabled={loadingAction} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors shadow-lg shadow-blue-200">
                     {loadingAction ? 'Saving...' : 'Save Worker'}
                 </button>
             </div>
         </form>
-       </Modal>
-       
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion">
-          <div>
-            <p className="text-gray-600">Are you sure you want to delete worker <strong className="text-blue-600">{workerToDelete?.fullName}</strong> ({workerToDelete?.opsId})?</p>
-            <p className="text-sm text-red-600 mt-2">This action cannot be undone.</p>
-            <div className="flex justify-end gap-4 mt-6">
-                <button onClick={() => setIsDeleteConfirmOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
-                <button onClick={handleDeleteWorker} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
-                    {loadingAction ? 'Deleting...' : 'Delete'}
-                </button>
-            </div>
-          </div>
       </Modal>
 
-      <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="Confirm Deletion of ALL Workers">
-          <div>
-            <p className="text-gray-600">Are you sure you want to delete <strong className="text-red-600">ALL {workers.length} worker records</strong> from the database?</p>
-            <p className="font-bold text-lg text-red-500 mt-4">This action is permanent and cannot be undone.</p>
-            <div className="flex justify-end gap-4 mt-6">
-                <button onClick={() => setIsDeleteAllConfirmOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
-                <button onClick={handleDeleteAllWorkers} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
-                    {loadingAction ? 'Deleting...' : 'Confirm Delete All'}
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion">
+        {workerToDelete && (
+            <div>
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                    <p className="text-red-700">Are you sure you want to delete <strong>{workerToDelete.fullName}</strong> ({workerToDelete.opsId})?</p>
+                    <p className="text-sm text-red-600 mt-1">This action cannot be undone.</p>
+                </div>
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setIsDeleteConfirmOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Cancel</button>
+                    <button onClick={handleDeleteWorker} disabled={loadingAction} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold shadow-lg shadow-red-200">
+                        {loadingAction ? 'Deleting...' : 'Yes, Delete'}
+                    </button>
+                </div>
+            </div>
+        )}
+      </Modal>
+
+      <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="DANGER ZONE: Reset Database">
+        <div>
+            <div className="bg-red-100 border-l-4 border-red-600 p-4 mb-6">
+                <h3 className="text-red-800 font-bold text-lg mb-2">WARNING: IRREVERSIBLE ACTION</h3>
+                <p className="text-red-700">You are about to delete <strong>ALL WORKER DATA</strong> from the database.</p>
+                <p className="text-red-700 mt-2">This will remove all employee records permanently. Attendance history might be affected if linked to deleted workers.</p>
+                <p className="text-red-800 font-bold mt-2">Are you absolutely sure?</p>
+            </div>
+            <div className="flex justify-end gap-3">
+                <button onClick={() => setIsDeleteAllConfirmOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Cancel</button>
+                <button onClick={handleDeleteAllWorkers} disabled={loadingAction} className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold shadow-lg shadow-red-200">
+                    {loadingAction ? 'Reseting...' : 'CONFIRM RESET ALL'}
                 </button>
             </div>
-          </div>
+        </div>
       </Modal>
-      
+
       <Modal isOpen={isImportSummaryOpen} onClose={() => setIsImportSummaryOpen(false)} title="Import Summary">
-        <div className="space-y-4 max-h-[60vh] overflow-y-auto">
-          <div>
-            <h3 className="font-semibold text-lg text-green-700">Successfully Imported ({importResults.success.length})</h3>
-            <ul className="text-sm text-gray-600 list-disc pl-5 mt-2 space-y-1">
-              {importResults.success.map((item, index) => <li key={index}>{item.fullName} ({item.opsId})</li>)}
-            </ul>
-          </div>
-          <div>
-            <h3 className="font-semibold text-lg text-red-700">Failed to Import ({importResults.failed.length})</h3>
-            <ul className="text-sm text-gray-600 list-disc pl-5 mt-2 space-y-1">
-              {importResults.failed.map((item, index) => <li key={index}>{item.row.fullName || 'N/A'} ({item.row.opsId || 'N/A'}) - <span className="font-medium text-red-600">{item.reason}</span></li>)}
-            </ul>
-          </div>
+        <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
+                    <p className="text-green-800 font-bold text-2xl">{importResults.success.length}</p>
+                    <p className="text-green-600 text-sm">Successfully Imported</p>
+                </div>
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200 text-center">
+                    <p className="text-red-800 font-bold text-2xl">{importResults.failed.length}</p>
+                    <p className="text-red-600 text-sm">Failed / Skipped</p>
+                </div>
+            </div>
+            
+            {importResults.failed.length > 0 && (
+                <div className="mt-4">
+                    <h4 className="font-bold text-gray-700 mb-2">Failed Items Details:</h4>
+                    <div className="bg-gray-50 rounded-lg border border-gray-200 max-h-48 overflow-y-auto p-2">
+                        <table className="w-full text-xs text-left">
+                            <thead className="text-gray-500 border-b">
+                                <tr>
+                                    <th className="p-1">OpsID</th>
+                                    <th className="p-1">Name</th>
+                                    <th className="p-1">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {importResults.failed.map((fail, idx) => (
+                                    <tr key={idx} className="border-b border-gray-100 last:border-0">
+                                        <td className="p-1 font-mono">{fail.row.opsId || '-'}</td>
+                                        <td className="p-1">{fail.row.fullName || '-'}</td>
+                                        <td className="p-1 text-red-600">{fail.reason}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+            
+            <div className="flex justify-end pt-2">
+                <button onClick={() => setIsImportSummaryOpen(false)} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">Done</button>
+            </div>
         </div>
       </Modal>
 
       <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
         {selectedWorker && (
             <div className="flex flex-col items-center justify-center p-4">
-                {/* Printable Area Wrapper with ID for CSS targeting */}
                 <div id="printable-qr" className="flex flex-col items-center text-center">
                     <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
                     <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
                         {qrCodeUrl ? (
-                            <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-64 print:w-48 print:h-48" />
+                            <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-auto max-w-full object-contain print:w-48 print:h-48" />
                         ) : (
                             <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
                         )}
@@ -496,7 +557,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                     <button onClick={handlePrintQr} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
                         <PrintIcon /> Print Struk
                     </button>
-                    <a href={qrCodeUrl} download={`${selectedWorker.fullName}_QR.png`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
+                     <a href={qrCodeUrl} download={`${selectedWorker.fullName}_QR.png`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
                         <DownloadIcon /> Save Image
                     </a>
                 </div>
@@ -511,4 +572,3 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 };
 
 export default Database;
-    

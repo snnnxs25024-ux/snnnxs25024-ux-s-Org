@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import QRCode from 'qrcode';
 import { Worker, AttendanceSession, AttendanceRecord } from '../types';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import Modal from '../components/Modal';
@@ -11,6 +12,7 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
 import EditIcon from '../components/icons/EditIcon';
+import PrintIcon from '../components/icons/PrintIcon';
 
 
 interface DashboardProps {
@@ -202,6 +204,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isEditingSession, setIsEditingSession] = useState(false);
     const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState<'ops' | 'excel' | null>(null);
+    const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+    const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+    const [qrWorkerData, setQrWorkerData] = useState<{ fullName: string; opsId: string; department: string } | null>(null);
+    
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Dynamic Options
@@ -647,6 +653,26 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             setIsEditingSession(false);
         }
     };
+    
+    const openQrModal = (record: AttendanceRecord) => {
+        const worker = workers.find(w => w.id === record.workerId);
+        const department = worker ? worker.department : '-';
+        
+        setQrWorkerData({
+            fullName: record.fullName,
+            opsId: record.opsId,
+            department: department
+        });
+        setQrCodeUrl('');
+        setIsQrModalOpen(true);
+        QRCode.toDataURL(record.opsId, { width: 300, margin: 2 })
+            .then(url => setQrCodeUrl(url))
+            .catch(err => console.error("Error generating QR", err));
+    };
+
+    const handlePrintQr = () => {
+        window.print();
+    };
 
     const currentMonthReports = useMemo(() => {
         const today = new Date();
@@ -1025,6 +1051,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                                 <td className="p-2"><span className={`px-2 py-1 text-xs rounded-full font-semibold ${statusColor}`}>{statusText}</span></td>
                                                 <td className="p-2">
                                                     <div className="flex justify-center items-center gap-2">
+                                                        <button onClick={() => openQrModal(record)} className="text-gray-600 hover:text-black p-1" title="Print QR Code">
+                                                            <PrintIcon />
+                                                        </button>
                                                         <button onClick={() => handleAction('takeout', record.id)} disabled={loadingAction || record.is_takeout} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">TakeOut</button>
                                                         <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || isCheckedOut || record.is_takeout} className="text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">CheckOut</button>
                                                         <button onClick={() => openDeleteRecordModal(record)} disabled={loadingAction} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" aria-label={`Remove ${record.fullName}`}><DeleteIcon /></button>
@@ -1188,6 +1217,40 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                  <span className="text-gray-600 font-medium">Total Kehadiran</span>
                                  <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
                             </div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
+                {qrWorkerData && (
+                    <div className="flex flex-col items-center justify-center p-4">
+                        <div id="printable-qr" className="flex flex-col items-center text-center">
+                            <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
+                            <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
+                                {qrCodeUrl ? (
+                                    <img src={qrCodeUrl} alt={`QR Code for ${qrWorkerData.opsId}`} className="w-64 h-auto max-w-full object-contain print:w-48 print:h-48" />
+                                ) : (
+                                    <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
+                                )}
+                            </div>
+                            <div className="mt-6 text-center">
+                                <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{qrWorkerData.fullName}</h2>
+                                <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black print:text-lg">{qrWorkerData.opsId}</p>
+                                <p className="text-sm text-gray-500 mt-2 print:hidden">{qrWorkerData.department}</p>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex gap-3 print:hidden no-print">
+                            <button onClick={handlePrintQr} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
+                                <PrintIcon /> Print Struk
+                            </button>
+                             <a href={qrCodeUrl} download={`${qrWorkerData.fullName}_QR.png`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
+                                <DownloadIcon /> Save Image
+                            </a>
+                        </div>
+                        <div className="mt-4 text-xs text-gray-400 print:hidden text-center max-w-xs no-print">
+                            *Klik "Print Struk" untuk mencetak langsung ke printer thermal (58mm/80mm). Pastikan printer sudah terhubung.
                         </div>
                     </div>
                 )}
