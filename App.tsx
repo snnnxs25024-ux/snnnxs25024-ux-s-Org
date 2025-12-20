@@ -8,6 +8,7 @@ import OpenList from './pages/OpenList';
 import PublicAttendance from './pages/PublicAttendance';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
+import WelcomePage from './pages/WelcomePage';
 import { Worker, AttendanceSession, AttendanceRecord } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
@@ -17,6 +18,7 @@ export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengat
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [showWelcome, setShowWelcome] = useState(true);
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceSession[]>([]);
@@ -187,6 +189,10 @@ const App: React.FC = () => {
           </div>
         </div>
       );
+  }
+
+  if (!session && showWelcome) {
+    return <WelcomePage onEnter={() => setShowWelcome(false)} />;
   }
 
   if (!session) {
