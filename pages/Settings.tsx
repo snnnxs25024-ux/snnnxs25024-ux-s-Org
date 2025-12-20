@@ -165,7 +165,7 @@ const Settings: React.FC = () => {
     };
 
     const renderList = (items: MasterData[]) => (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+        <div className="bg-white rounded-b-lg shadow border border-gray-200 overflow-hidden">
             <ul className="divide-y divide-gray-100 max-h-[500px] overflow-y-auto">
                 {items.length === 0 ? (
                     <li className="p-4 text-center text-gray-400 italic">Belum ada data. Tambahkan di atas.</li>
@@ -192,79 +192,81 @@ const Settings: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-800">Pengaturan Master Data</h1>
             <p className="text-gray-500">Kelola daftar pilihan Divisi, Jam Shift, dan Shift ID agar muncul di menu Absensi.</p>
 
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                {/* Tabs */}
-                <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+                {/* Blue Tab Header Container */}
+                <div className="bg-blue-600 p-1 flex gap-1 overflow-x-auto no-scrollbar">
                     <button 
                         onClick={() => setActiveTab('DIVISION')}
-                        className={`px-4 py-2 font-semibold text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'DIVISION' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 min-w-[120px] px-4 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-lg ${activeTab === 'DIVISION' ? 'bg-white text-blue-600 shadow-inner' : 'text-white hover:bg-white/10'}`}
                     >
                         Divisi ({divisions.length})
                     </button>
                     <button 
                         onClick={() => setActiveTab('SHIFT_TIME')}
-                        className={`px-4 py-2 font-semibold text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'SHIFT_TIME' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 min-w-[120px] px-4 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-lg ${activeTab === 'SHIFT_TIME' ? 'bg-white text-blue-600 shadow-inner' : 'text-white hover:bg-white/10'}`}
                     >
                         Jam Shift ({shiftTimes.length})
                     </button>
                     <button 
                         onClick={() => setActiveTab('SHIFT_ID')}
-                        className={`px-4 py-2 font-semibold text-sm transition-colors border-b-2 whitespace-nowrap ${activeTab === 'SHIFT_ID' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 min-w-[120px] px-4 py-3 font-black text-xs uppercase tracking-widest transition-all rounded-lg ${activeTab === 'SHIFT_ID' ? 'bg-white text-blue-600 shadow-inner' : 'text-white hover:bg-white/10'}`}
                     >
                         Shift ID ({shiftIds.length})
                     </button>
                 </div>
 
-                {/* Bulk Actions */}
-                <div className="flex flex-col sm:flex-row justify-end gap-2 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <button 
-                        onClick={handleDownloadTemplate}
-                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                    >
-                        <DownloadIcon /> Download Template
-                    </button>
-                    <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={actionLoading}
-                        className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
-                    >
-                        <UploadIcon /> {actionLoading ? 'Importing...' : 'Import Excel'}
-                    </button>
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleImport} 
-                        className="hidden" 
-                        accept=".xlsx, .xls" 
-                    />
+                <div className="p-6">
+                    {/* Bulk Actions */}
+                    <div className="flex flex-col sm:flex-row justify-end gap-2 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                        <button 
+                            onClick={handleDownloadTemplate}
+                            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                        >
+                            <DownloadIcon /> Download Template
+                        </button>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={actionLoading}
+                            className="flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50"
+                        >
+                            <UploadIcon /> {actionLoading ? 'Importing...' : 'Import Excel'}
+                        </button>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleImport} 
+                            className="hidden" 
+                            accept=".xlsx, .xls" 
+                        />
+                    </div>
+
+                    {/* Add Form */}
+                    <form onSubmit={handleAdd} className="flex gap-2 mb-6">
+                        <input 
+                            type="text" 
+                            value={newItemValue}
+                            onChange={e => setNewItemValue(e.target.value)}
+                            placeholder={`Ketik manual ${activeTab === 'DIVISION' ? 'Nama Divisi' : activeTab === 'SHIFT_TIME' ? 'Jam (ex: 08:00 - 17:00)' : 'Kode Shift ID'}...`}
+                            className="flex-1 bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={actionLoading || !newItemValue.trim()}
+                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 shrink-0"
+                        >
+                            <AddIcon /> Tambah
+                        </button>
+                    </form>
+
+                    {/* List Data */}
+                    {loading ? (
+                        <div className="text-center py-8 text-gray-500 animate-pulse">Memuat data...</div>
+                    ) : (
+                        activeTab === 'DIVISION' ? renderList(divisions) :
+                        activeTab === 'SHIFT_TIME' ? renderList(shiftTimes) :
+                        renderList(shiftIds)
+                    )}
                 </div>
-
-                {/* Add Form */}
-                <form onSubmit={handleAdd} className="flex gap-2 mb-6">
-                    <input 
-                        type="text" 
-                        value={newItemValue}
-                        onChange={e => setNewItemValue(e.target.value)}
-                        placeholder={`Ketik manual ${activeTab === 'DIVISION' ? 'Nama Divisi' : activeTab === 'SHIFT_TIME' ? 'Jam (ex: 08:00 - 17:00)' : 'Kode Shift ID'}...`}
-                        className="flex-1 bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button 
-                        type="submit" 
-                        disabled={actionLoading || !newItemValue.trim()}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-50 shrink-0"
-                    >
-                        <AddIcon /> Tambah
-                    </button>
-                </form>
-
-                {/* List Data */}
-                {loading ? (
-                    <div className="text-center py-8 text-gray-500 animate-pulse">Memuat data...</div>
-                ) : (
-                    activeTab === 'DIVISION' ? renderList(divisions) :
-                    activeTab === 'SHIFT_TIME' ? renderList(shiftTimes) :
-                    renderList(shiftIds)
-                )}
             </div>
             
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-sm text-yellow-800">

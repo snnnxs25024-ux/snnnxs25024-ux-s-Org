@@ -1044,7 +1044,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="p-2">{record.opsId}</td>
+                                                <td className="p-2 text-gray-900 font-mono">{record.opsId}</td>
                                                 <td className="p-2">{record.fullName}</td>
                                                 <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
                                                 <td className="p-2 font-mono">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
@@ -1236,7 +1236,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                             <div className="mt-6 text-center">
                                 <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{qrWorkerData.fullName}</h2>
-                                <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black print:text-lg">{qrWorkerData.opsId}</p>
+                                <p className="text-lg text-black font-mono tracking-wider mt-1 print:text-black print:text-lg">{qrWorkerData.opsId}</p>
                                 <p className="text-sm text-gray-500 mt-2 print:hidden">{qrWorkerData.department}</p>
                             </div>
                         </div>
@@ -1260,4 +1260,3 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 };
 
 export default Dashboard;
-    

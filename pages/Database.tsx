@@ -336,7 +336,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
         <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-            <thead className="bg-Blue-600 text-White uppercase font-semibold">
+            <thead className="bg-blue-600 text-white uppercase font-semibold">
                 <tr>
                 <th className="p-4">OpsID</th>
                 <th className="p-4">Full Name</th>
@@ -348,7 +348,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <tbody className="divide-y divide-gray-200">
                 {filteredWorkers.map((worker) => (
                 <tr key={worker.id} className="hover:bg-blue-50 transition-colors">
-                    <td className="p-4 font-mono font-medium text-blue-600">{worker.opsId}</td>
+                    <td className="p-4 font-mono font-medium text-black">{worker.opsId}</td>
                     <td className="p-4 font-semibold text-gray-800">{worker.fullName}</td>
                     <td className="p-4 hidden md:table-cell">{worker.department}</td>
                     <td className="p-4 hidden lg:table-cell">
@@ -382,7 +382,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                     <p className="text-xs text-gray-500 uppercase font-bold">OpsID</p>
-                    <p className="text-lg font-mono text-blue-700">{selectedWorker.opsId}</p>
+                    <p className="text-lg font-mono text-black">{selectedWorker.opsId}</p>
                 </div>
                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                     <p className="text-xs text-gray-500 uppercase font-bold">Full Name</p>
@@ -548,7 +548,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                     </div>
                     <div className="mt-6 text-center">
                         <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{selectedWorker.fullName}</h2>
-                        <p className="text-lg text-blue-600 font-mono tracking-wider mt-1 print:text-black print:text-lg">{selectedWorker.opsId}</p>
+                        <p className="text-lg text-black font-mono tracking-wider mt-1 print:text-black print:text-lg">{selectedWorker.opsId}</p>
                         <p className="text-sm text-gray-500 mt-2 print:hidden">{selectedWorker.department}</p>
                     </div>
                 </div>
