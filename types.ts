@@ -33,7 +33,6 @@ export interface AttendanceSession {
   planMpp: number;
   status?: 'OPEN' | 'CLOSED'; // New field for session status
   session_type?: 'MANUAL' | 'PUBLIC'; // Distinguish between Admin Manual session and Open List Public session
-  auto_close?: boolean; // New field for auto-closing when quota is reached
   records: AttendanceRecord[];
 }
 
