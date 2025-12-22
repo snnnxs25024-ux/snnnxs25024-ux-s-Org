@@ -317,36 +317,43 @@ const Attendance: React.FC<AttendanceProps> = ({
             <div className="bg-white rounded-lg shadow-lg overflow-hidden border border-gray-200 transition-shadow duration-300 hover:shadow-xl">
                  <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-blue-600 text-white">
+                        <thead className="bg-blue-600 text-white shadow-sm">
                             <tr>
-                                <th className="p-3 font-semibold rounded-tl-lg">OpsID</th>
-                                <th className="p-3 font-semibold">Nama Lengkap</th>
-                                <th className="p-3 font-semibold">Shift Jam Masuk</th>
-                                <th className="p-3 font-semibold">Jam Scan (Aktual)</th>
-                                <th className="p-3 font-semibold">Status</th>
-                                <th className="p-3 font-semibold text-center rounded-tr-lg">Hapus</th>
+                                <th className="p-4 font-bold uppercase tracking-wider rounded-tl-lg">OpsID</th>
+                                <th className="p-4 font-bold uppercase tracking-wider">Nama Lengkap</th>
+                                <th className="p-4 font-bold uppercase tracking-wider">Shift Jam Masuk</th>
+                                <th className="p-4 font-bold uppercase tracking-wider">Jam Scan (Aktual)</th>
+                                <th className="p-4 font-bold uppercase tracking-wider">Status</th>
+                                <th className="p-4 font-bold uppercase tracking-wider text-center rounded-tr-lg">Hapus</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {activeRecords.map(record => (
-                                <tr key={record.workerId} className="hover:bg-gray-50">
-                                    <td className="p-3">{record.opsId}</td>
-                                    <td className="p-3">{record.fullName}</td>
-                                    <td className="p-3">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
-                                    <td className="p-3 font-mono text-gray-500">
+                                <tr key={record.workerId} className="hover:bg-blue-50 transition-colors">
+                                    <td className="p-4 font-mono font-bold text-black">{record.opsId}</td>
+                                    <td className="p-4 font-semibold text-gray-800">{record.fullName}</td>
+                                    <td className="p-4 text-gray-700">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
+                                    <td className="p-4 font-mono text-gray-500">
                                         {record.scan_timestamp 
                                             ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
                                             : '-'
                                         }
                                     </td>
-                                    <td className="p-3 text-green-600 font-semibold">Hadir</td>
-                                    <td className="p-3 text-center">
+                                    <td className="p-4">
+                                        <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-xs font-black uppercase">Hadir</span>
+                                    </td>
+                                    <td className="p-4 text-center">
                                       <button onClick={() => handleRemoveActiveRecord(record.workerId)} className="text-red-500 hover:text-red-700 transition-colors p-1" aria-label={`Remove ${record.fullName}`}>
                                         <DeleteIcon />
                                       </button>
                                     </td>
                                 </tr>
                             ))}
+                            {activeRecords.length === 0 && (
+                                <tr>
+                                    <td colSpan={6} className="p-8 text-center text-gray-400 italic">Belum ada karyawan yang di-scan.</td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -427,4 +434,3 @@ const Attendance: React.FC<AttendanceProps> = ({
 };
 
 export default Attendance;
-    

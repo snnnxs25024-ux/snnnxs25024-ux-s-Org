@@ -32,6 +32,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [autoCloseToggle, setAutoCloseToggle] = useState(true);
 
   // Dynamic Options
   const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
@@ -56,20 +57,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
-  // Try to restore an active OPEN session on mount
   useEffect(() => {
       const restoreSession = async () => {
           const today = getTodayString();
-          // Cari sesi OPEN hari ini yang TIPE-nya PUBLIC.
           const { data } = await supabase
               .from('attendance_sessions')
               .select('*')
               .eq('status', 'OPEN')
               .eq('date', today)
-              .eq('session_type', 'PUBLIC') // Filter specific for Open List
-              .order('id', { ascending: false })
+              .eq('session_type', 'PUBLIC')
+              .order('created_at', { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
           
           if (data) {
               setActiveSession({ ...data, records: [] });
@@ -78,11 +77,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       restoreSession();
   }, []);
 
-  // Realtime updates replacing polling
   useEffect(() => {
     if (!activeSession) return;
 
-    // 1. Initial Load of Records
     const fetchLiveRecords = async () => {
         const { data } = await supabase
           .from('attendance_records')
@@ -104,7 +101,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     };
     fetchLiveRecords();
 
-    // 2. Realtime Subscription
     const channel = supabase.channel(`open_list_${activeSession.id}`)
       .on(
         'postgres_changes',
@@ -149,8 +145,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       shiftTime: formData.get('shiftTime') as string,
       shiftId: formData.get('shiftId') as string,
       planMpp: parseInt(formData.get('planMpp') as string, 10),
+      auto_close: autoCloseToggle,
       status: 'OPEN' as const,
-      session_type: 'PUBLIC' as const // Explicitly mark as Public
+      session_type: 'PUBLIC' as const
     };
 
     const { error: insertError } = await supabase
@@ -168,35 +165,22 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const handleCloseSession = async () => {
       if (!activeSession) return;
-      
       const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini?");
       if (!confirmClose) return;
-
-      // Update status to CLOSED in DB
-      const { error } = await supabase
-        .from('attendance_sessions')
-        .update({ status: 'CLOSED' })
-        .eq('id', activeSession.id);
-
+      const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', activeSession.id);
       if (error) {
           alert("Gagal menutup sesi: " + error.message);
           return;
       }
-      
       const sessionId = activeSession.id;
-
-      // Clear local state
       setActiveSession(null);
       setLiveRecords([]);
-      
-      // REDIRECT KE DASHBOARD dan Buka Modal Manage Session
       window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
   };
 
   const getPublicLink = () => {
       if(!activeSession) return '';
-      const baseUrl = window.location.origin;
-      return `${baseUrl}/attend/${activeSession.id}`;
+      return `${window.location.origin}/attend/${activeSession.id}`;
   };
 
   const copyToClipboard = () => {
@@ -207,12 +191,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const handleDeleteRecord = async (recordId: number) => {
       if(!confirm("Are you sure you want to remove this entry?")) return;
-      
       const { error } = await supabase.from('attendance_records').delete().eq('id', recordId);
       if(error) alert("Failed to delete");
-      else {
-          setLiveRecords(prev => prev.filter(r => r.id !== recordId));
-      }
+      else setLiveRecords(prev => prev.filter(r => r.id !== recordId));
   };
 
   return (
@@ -248,8 +229,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                     </div>
                     <div className="md:col-span-2">
                         <label className="block mb-2 text-sm font-medium text-gray-700">Target Kuota (Plan MPP)</label>
-                        <input type="number" name="planMpp" min="1" placeholder="Masukkan angka kuota (misal: 50)" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
-                        <p className="text-xs text-gray-500 mt-1">*Jika absensi melebihi angka ini, status akan otomatis menjadi "Buffer".</p>
+                        <input type="number" name="planMpp" min="1" placeholder="Masukkan angka kuota (misal: 3)" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
+                        
+                        <div className="mt-4 flex items-center justify-between bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <div>
+                                <p className="text-sm font-bold text-blue-800">Tutup Sesi Otomatis</p>
+                                <p className="text-xs text-blue-600">Sesi akan otomatis CLOSED jika kuota terpenuhi.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" checked={autoCloseToggle} onChange={() => setAutoCloseToggle(!autoCloseToggle)} className="sr-only peer" />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
@@ -260,11 +251,13 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
          </div>
       ) : (
           <div className="space-y-6">
-              {/* Active Session Monitor */}
               <div className="bg-green-50 border border-green-200 rounded-xl p-6 animate-fade-in">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                       <div>
-                          <span className="bg-green-200 text-green-800 text-xs font-bold px-2 py-1 rounded-full animate-pulse">LIVE OPEN</span>
+                          <div className="flex items-center gap-2">
+                             <span className="bg-green-200 text-green-800 text-[10px] font-black px-2 py-0.5 rounded-full animate-pulse uppercase">LIVE OPEN</span>
+                             {activeSession.auto_close && <span className="bg-blue-200 text-blue-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Auto-Close ON</span>}
+                          </div>
                           <h2 className="text-2xl font-bold text-gray-800 mt-2">Sesi Aktif: {activeSession.division}</h2>
                           <p className="text-gray-600">{activeSession.date} | {activeSession.shiftTime}</p>
                           <p className="text-sm text-gray-500 font-mono mt-1">ID: {activeSession.shiftId}</p>
@@ -276,14 +269,13 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                                    <CopyIcon /> {copySuccess ? 'Copied!' : 'Copy'}
                                </button>
                            </div>
-                           <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-sm">
-                               Tutup Sesi
+                           <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-sm w-full md:w-auto">
+                               Tutup Sesi Sekarang
                            </button>
                       </div>
                   </div>
               </div>
 
-              {/* Stats & Table */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white p-4 rounded-lg shadow border border-t-4 border-blue-500">
                       <p className="text-gray-500 text-sm font-bold uppercase">Total Hadir</p>
@@ -294,7 +286,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                       <p className="text-3xl font-bold text-green-600">
                           {liveRecords.filter(r => !r.manual_status).length}
                       </p>
-                      <p className="text-xs text-gray-400">Kuota: {activeSession.planMpp}</p>
+                      <p className="text-xs text-gray-400">Target: {activeSession.planMpp}</p>
                   </div>
                   <div className="bg-white p-4 rounded-lg shadow border border-t-4 border-yellow-500">
                       <p className="text-gray-500 text-sm font-bold uppercase">Buffer</p>
@@ -310,25 +302,25 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                        <thead className="bg-blue-600 text-white uppercase text-xs">
                             <tr>
-                                <th className="p-3">Waktu</th>
-                                <th className="p-3">OpsID</th>
-                                <th className="p-3">Nama</th>
-                                <th className="p-3">Status</th>
-                                <th className="p-3 text-center">Aksi</th>
+                                <th className="p-4 font-black tracking-widest">Waktu</th>
+                                <th className="p-4 font-black tracking-widest">OpsID</th>
+                                <th className="p-4 font-black tracking-widest">Nama</th>
+                                <th className="p-4 font-black tracking-widest">Status</th>
+                                <th className="p-4 font-black tracking-widest text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {liveRecords.map(rec => (
                                 <tr key={rec.id} className="hover:bg-blue-50 transition-colors">
-                                    <td className="p-3 font-mono text-gray-500">
+                                    <td className="p-4 font-mono text-gray-500">
                                         {new Date(rec.scan_timestamp || rec.timestamp).toLocaleTimeString('id-ID')}
                                     </td>
-                                    <td className="p-3 font-bold">{rec.opsId}</td>
-                                    <td className="p-3">{rec.fullName}</td>
-                                    <td className="p-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${
+                                    <td className="p-4 font-mono font-bold text-black">{rec.opsId}</td>
+                                    <td className="p-4 font-semibold text-gray-800">{rec.fullName}</td>
+                                    <td className="p-4">
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
                                             rec.manual_status === 'Buffer' 
                                             ? 'bg-yellow-100 text-yellow-800' 
                                             : 'bg-green-100 text-green-800'
@@ -336,8 +328,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                                             {rec.manual_status || 'On Plan'}
                                         </span>
                                     </td>
-                                    <td className="p-3 text-center">
-                                        <button onClick={() => handleDeleteRecord(rec.id)} className="text-red-400 hover:text-red-600">
+                                    <td className="p-4 text-center">
+                                        <button onClick={() => handleDeleteRecord(rec.id)} className="text-red-400 hover:text-red-600 transition-transform active:scale-90">
                                             <DeleteIcon />
                                         </button>
                                     </td>
@@ -345,7 +337,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                             ))}
                             {liveRecords.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-6 text-center text-gray-400 italic">
+                                    <td colSpan={5} className="p-8 text-center text-gray-400 italic">
                                         Belum ada data masuk. Menunggu karyawan mengakses link...
                                     </td>
                                 </tr>

@@ -30,14 +30,12 @@ type PeriodicReportData = {
   attendanceCount: number;
 }[];
 
-// Interface for Summary Stats
 interface SummaryStats {
     plan: number;
     actual: number;
     gap: number;
 }
 
-// Fallbacks
 const defaultShiftIds = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
     'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
@@ -64,7 +62,6 @@ const generatePeriodicReport = (
   const workerDetails: { [workerId: string]: { opsId: string; fullName: string } } = {};
 
   const relevantSessions = sessions.filter(session => {
-    // Use local time for comparison by avoiding 'Z'
     const sessionDate = new Date(session.date + 'T00:00:00');
     return sessionDate >= startDate && sessionDate <= endDate;
   });
@@ -72,11 +69,8 @@ const generatePeriodicReport = (
   for (const session of relevantSessions) {
     const uniqueWorkerIdsThisDay = new Set<string>();
     for (const record of session.records) {
-      // LOGIC UPDATE: Only count if NOT takeout AND IS arrived (Physical Presence)
       if (!record.is_takeout && record.is_arrived) {
         uniqueWorkerIdsThisDay.add(record.workerId);
-        
-        // Prioritize details from the record itself. 
         if (!workerDetails[record.workerId] || workerDetails[record.workerId].fullName === 'Unknown') {
             workerDetails[record.workerId] = {
                 opsId: record.opsId,
@@ -115,53 +109,55 @@ const generatePeriodicReport = (
 
 const ReportList: React.FC<{ title: string; data: PeriodicReportData; onWorkerClick: (workerId: string, workerName: string) => void; }> = ({ title, data, onWorkerClick }) => (
     <div className="flex-1">
-        <h4 className="text-md font-semibold text-gray-700 mb-2 border-b border-gray-200 pb-2">{title}</h4>
-        <div className="max-h-64 overflow-y-auto pr-2">
+        <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 border-b border-gray-100 pb-2">{title}</h4>
+        <div className="max-h-64 overflow-y-auto pr-2 no-scrollbar">
             {data.length > 0 ? (
                 <ul className="space-y-2">
                     {data.map(item => (
                         <li key={item.workerId} 
-                            className="flex justify-between items-center text-sm bg-gray-50 p-2 rounded-md border border-gray-200 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                            className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all group shadow-sm"
                             onClick={() => onWorkerClick(item.workerId, item.fullName)}
                         >
-                            <div>
-                                <p className="font-semibold text-gray-800">{item.fullName}</p>
-                                <p className="text-xs text-gray-500">{item.opsId}</p>
+                            <div className="min-w-0 pr-2">
+                                <p className="font-black text-xs text-gray-800 uppercase truncate group-hover:text-blue-600">{item.fullName}</p>
+                                <p className="text-[10px] text-black font-black font-mono mt-0.5">{item.opsId}</p>
                             </div>
-                            <span className="font-bold text-lg text-blue-600">{item.attendanceCount} HK</span>
+                            <div className="shrink-0 bg-blue-600 px-2 py-1 rounded-lg">
+                                <span className="font-black text-[10px] text-white uppercase tracking-tighter">{item.attendanceCount} HK</span>
+                            </div>
                         </li>
                     ))}
                 </ul>
             ) : (
-                <p className="text-gray-500 text-center pt-8">No data for this period.</p>
+                <p className="text-gray-400 text-[10px] font-bold uppercase text-center pt-8 tracking-widest">Tidak ada data.</p>
             )}
         </div>
     </div>
 );
 
 const StatCard: React.FC<{ title: string; value: string | number; description: string; borderColor: string }> = ({ title, value, description, borderColor }) => (
-    <div className={`bg-white p-6 rounded-lg shadow-lg border border-gray-200 transition-all duration-300 hover:shadow-xl hover:border-blue-400 border-t-4 ${borderColor}`}>
-        <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-        <p className="text-3xl font-bold text-blue-600 my-2">{value}</p>
-        <p className="text-xs text-gray-400">{description}</p>
+    <div className={`bg-white p-6 rounded-2xl shadow-xl shadow-gray-100 border border-gray-100 transition-all duration-300 hover:-translate-y-1 border-t-4 ${borderColor}`}>
+        <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">{title}</h3>
+        <p className="text-4xl font-black text-gray-900 my-3 tracking-tighter">{value}</p>
+        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{description}</p>
     </div>
 );
 
 const SummaryItem: React.FC<{ label: string; stats: SummaryStats; bgColor: string; textColor: string }> = ({ label, stats, bgColor, textColor }) => (
-    <div className={`text-center p-3 rounded-lg ${bgColor} flex flex-col justify-between h-full`}>
-        <p className={`text-[10px] md:text-xs uppercase font-extrabold ${textColor} opacity-80 mb-2 tracking-wide`}>{label}</p>
-        <div className="space-y-1">
-            <div className="flex justify-between items-center border-b border-black/10 pb-1">
-                <span className="text-[10px] font-medium opacity-70">Plan</span>
-                <span className={`text-sm font-bold ${textColor}`}>{stats.plan}</span>
+    <div className={`text-center p-4 rounded-2xl ${bgColor} flex flex-col justify-between h-full border border-black/5`}>
+        <p className={`text-[10px] uppercase font-black ${textColor} opacity-80 mb-3 tracking-[0.2em]`}>{label}</p>
+        <div className="space-y-1.5">
+            <div className="flex justify-between items-center border-b border-black/5 pb-1.5">
+                <span className="text-[9px] font-black uppercase opacity-60">Plan</span>
+                <span className={`text-xs font-black ${textColor}`}>{stats.plan}</span>
             </div>
-             <div className="flex justify-between items-center border-b border-black/10 pb-1">
-                <span className="text-[10px] font-medium opacity-70">Actual</span>
-                <span className={`text-xl font-bold ${textColor}`}>{stats.actual}</span>
+             <div className="flex justify-between items-center border-b border-black/5 pb-1.5">
+                <span className="text-[9px] font-black uppercase opacity-60">Actual</span>
+                <span className={`text-lg font-black ${textColor} tracking-tighter`}>{stats.actual}</span>
             </div>
-             <div className="flex justify-between items-center pt-1">
-                <span className="text-[10px] font-medium opacity-70">Gap</span>
-                <span className={`text-sm font-bold ${stats.gap >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+             <div className="flex justify-between items-center pt-1.5">
+                <span className="text-[9px] font-black uppercase opacity-60">Gap</span>
+                <span className={`text-xs font-black ${stats.gap >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                     {stats.gap > 0 ? `+${stats.gap}` : stats.gap}
                 </span>
             </div>
@@ -210,7 +206,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Dynamic Options
     const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
     const [divisionOpts, setDivisionOpts] = useState<string[]>(defaultDivisions);
     const [shiftTimeOpts, setShiftTimeOpts] = useState<string[]>(defaultShiftTimes);
@@ -231,7 +226,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         fetchMasterOptions();
     }, []);
 
-    // Auto-open modal logic based on prop
     useEffect(() => {
         if (autoOpenSessionId && attendanceHistory.length > 0) {
             const session = attendanceHistory.find(s => s.id === autoOpenSessionId);
@@ -247,7 +241,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             if (updatedSession) {
                 setSelectedSession(updatedSession);
             } else {
-                // Session was deleted, so close the modal.
                 setIsManageModalOpen(false);
             }
         }
@@ -259,24 +252,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 setIsCopyDropdownOpen(false);
             }
         };
-
-        if (isCopyDropdownOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        } else {
-            document.removeEventListener('mousedown', handleClickOutside);
-        }
-
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
+        if (isCopyDropdownOpen) document.addEventListener('mousedown', handleClickOutside);
+        else document.removeEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isCopyDropdownOpen]);
 
-    const activeWorkers = workers.filter(w => w.status === 'Active').length;
+    const activeWorkersCount = workers.filter(w => w.status === 'Active').length;
 
     const calculateFulfillment = (startDay: number, endDay: number) => {
         const today = new Date();
         const relevantSessions = attendanceHistory.filter(session => {
-            // Use local time parsing
             const sessionDate = new Date(session.date + 'T00:00:00');
             if (isNaN(sessionDate.getTime())) return false;
             return sessionDate.getMonth() === today.getMonth() &&
@@ -284,25 +269,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                    sessionDate.getDate() >= startDay &&
                    sessionDate.getDate() <= endDay;
         });
-
         if (relevantSessions.length === 0) return '0%';
         const totalPlanned = relevantSessions.reduce((sum, s) => sum + s.planMpp, 0);
-        // LOGIC UPDATE: Calculate Actual based on is_arrived check
         const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout && r.is_arrived).length, 0);
         if (totalPlanned === 0) return 'N/A';
-        const percentage = (totalActual / totalPlanned) * 100;
-        return `${percentage.toFixed(1)}%`;
+        return `${((totalActual / totalPlanned) * 100).toFixed(1)}%`;
     };
 
-    const fulfillmentPeriod1 = calculateFulfillment(1, 15);
-    const fulfillmentPeriod2 = calculateFulfillment(16, 31);
-    
-    // Filter attendance history to only show current month
     const currentMonthHistory = useMemo(() => {
         const today = new Date();
         const currentMonth = today.getMonth();
         const currentYear = today.getFullYear();
-
         return attendanceHistory
             .filter(session => {
                 const sessionDate = new Date(session.date + 'T00:00:00');
@@ -328,7 +305,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 'Tipe Sesi': session.session_type || 'MANUAL'
             }))
         );
-
         if (format === 'xlsx') {
             const worksheet = XLSX.utils.json_to_sheet(reportData);
             const workbook = XLSX.utils.book_new();
@@ -346,84 +322,41 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
     const summaryCounts = useMemo(() => {
         const today_local = new Date();
-        
-        // Fix for timezone issue: create YYYY-MM-DD string from local date components
         const year = today_local.getFullYear();
         const month = (today_local.getMonth() + 1).toString().padStart(2, '0');
         const day = today_local.getDate().toString().padStart(2, '0');
         const todayString = `${year}-${month}-${day}`;
-
         const currentYear = today_local.getFullYear();
         const currentMonth = today_local.getMonth();
-
         const startOfWeek = new Date(today_local);
         startOfWeek.setDate(startOfWeek.getDate() - today_local.getDay() + (today_local.getDay() === 0 ? -6 : 1));
         startOfWeek.setHours(0, 0, 0, 0);
-
         const endOfWeek = new Date(startOfWeek);
         endOfWeek.setDate(startOfWeek.getDate() + 6);
         endOfWeek.setHours(23, 59, 59, 999);
-
-        // Initial Stats Structure
-        const counts: { 
-            today: SummaryStats, 
-            thisWeek: SummaryStats, 
-            thisMonth: SummaryStats, 
-            period1: SummaryStats, 
-            period2: SummaryStats 
-        } = { 
+        const counts: { [key: string]: SummaryStats } = { 
             today: { plan: 0, actual: 0, gap: 0 }, 
             thisWeek: { plan: 0, actual: 0, gap: 0 }, 
             thisMonth: { plan: 0, actual: 0, gap: 0 }, 
             period1: { plan: 0, actual: 0, gap: 0 }, 
             period2: { plan: 0, actual: 0, gap: 0 } 
         };
-
-        const addToStats = (key: keyof typeof counts, planned: number, actual: number) => {
-            counts[key].plan += planned;
-            counts[key].actual += actual;
-        };
-
         attendanceHistory.forEach(session => {
             const sessionDate = new Date(session.date + 'T00:00:00'); 
             if (isNaN(sessionDate.getTime())) return;
-            
             const planned = session.planMpp || 0;
-            // LOGIC UPDATE: Actual only counts physical presence (is_arrived)
             const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
-
-            if (session.date === todayString) {
-                addToStats('today', planned, actual);
-            }
-
-            if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
-                 addToStats('thisWeek', planned, actual);
-            }
-
+            if (session.date === todayString) { counts.today.plan += planned; counts.today.actual += actual; }
+            if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) { counts.thisWeek.plan += planned; counts.thisWeek.actual += actual; }
             if (sessionDate.getFullYear() === currentYear && sessionDate.getMonth() === currentMonth) {
-                 addToStats('thisMonth', planned, actual);
-                const dayOfMonth = sessionDate.getDate();
-                if (dayOfMonth <= 15) {
-                     addToStats('period1', planned, actual);
-                } else {
-                     addToStats('period2', planned, actual);
-                }
+                counts.thisMonth.plan += planned; counts.thisMonth.actual += actual;
+                if (sessionDate.getDate() <= 15) { counts.period1.plan += planned; counts.period1.actual += actual; }
+                else { counts.period2.plan += planned; counts.period2.actual += actual; }
             }
         });
-
-        // Calculate Gap Final (Actual - Plan)
-        Object.keys(counts).forEach(k => {
-            const key = k as keyof typeof counts;
-            counts[key].gap = counts[key].actual - counts[key].plan;
-        });
-
+        Object.keys(counts).forEach(k => { counts[k].gap = counts[k].actual - counts[k].plan; });
         return counts;
     }, [attendanceHistory]);
-
-
-    const formattedDate = new Intl.DateTimeFormat('id-ID', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    }).format(new Date());
 
     const openManageModal = (session: AttendanceSession) => {
         setSelectedSession(session);
@@ -462,9 +395,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setLoadingAction(true);
         const { error } = await supabase.from('attendance_records').delete().eq('id', recordToDelete.id);
         setLoadingAction(false);
-        if (error) {
-            alert(`Error removing record: ${error.message}`);
-        } else {
+        if (error) alert(`Error removing record: ${error.message}`);
+        else {
             setAttendanceHistory(prevHistory =>
                 prevHistory.map(session =>
                     session.id === selectedSession.id
@@ -480,55 +412,30 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleAction = async (action: 'checkout' | 'takeout', recordId: number) => {
         setLoadingAction(true);
         const updateData = action === 'checkout' ? { checkout_timestamp: new Date().toISOString() } : { is_takeout: true };
-        
-        const { data: updatedRecord, error } = await supabase
-            .from('attendance_records')
-            .update(updateData)
-            .eq('id', recordId)
-            .select()
-            .single();
-
+        const { data: updatedRecord, error } = await supabase.from('attendance_records').update(updateData).eq('id', recordId).select().single();
         setLoadingAction(false);
-        if (error) {
-            alert(`Error updating record: ${error.message}`);
-        } else if (updatedRecord && selectedSession) {
-             const updatedFields = {
-                checkout_timestamp: updatedRecord.checkout_timestamp,
-                is_takeout: updatedRecord.is_takeout,
-            };
+        if (error) alert(`Error updating record: ${error.message}`);
+        else if (updatedRecord && selectedSession) {
+             const updatedFields = { checkout_timestamp: updatedRecord.checkout_timestamp, is_takeout: updatedRecord.is_takeout };
             setAttendanceHistory(prevHistory =>
                 prevHistory.map(session =>
-                    session.id === selectedSession.id
-                        ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, ...updatedFields } : r) }
-                        : session
+                    session.id === selectedSession.id ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, ...updatedFields } : r) } : session
                 )
             );
         }
     };
 
-    // Toggle Arrival Status (Hadir vs Sedang di jalan)
     const handleToggleArrival = async (recordId: number, currentStatus: boolean) => {
         const newStatus = !currentStatus;
-        // Optimistic Update
         if (selectedSession) {
             setAttendanceHistory(prevHistory =>
                 prevHistory.map(session =>
-                    session.id === selectedSession.id
-                        ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, is_arrived: newStatus } : r) }
-                        : session
+                    session.id === selectedSession.id ? { ...session, records: session.records.map(r => r.id === recordId ? { ...r, is_arrived: newStatus } : r) } : session
                 )
             );
         }
-
-        const { error } = await supabase
-            .from('attendance_records')
-            .update({ is_arrived: newStatus })
-            .eq('id', recordId);
-
-        if (error) {
-            alert('Gagal update status: ' + error.message);
-            refreshData(); // Revert on error
-        }
+        const { error } = await supabase.from('attendance_records').update({ is_arrived: newStatus }).eq('id', recordId);
+        if (error) { alert('Gagal update status: ' + error.message); refreshData(); }
     };
 
     const handleCheckOutAll = async () => {
@@ -536,19 +443,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const now = new Date().getTime();
         const nineHoursInMillis = 9 * 60 * 60 * 1000;
         const recordsToCheckOut = selectedSession.records.filter(r => !r.checkout_timestamp && !r.is_takeout && (now - new Date(r.timestamp).getTime()) < nineHoursInMillis);
-        if (recordsToCheckOut.length === 0) {
-            alert("All remaining workers have been auto-checked out or already checked out manually.");
-            return;
-        }
+        if (recordsToCheckOut.length === 0) { alert("Semua karyawan sudah check-out."); return; }
         const recordIdsToCheckOut = recordsToCheckOut.map(r => r.id);
         setLoadingAction(true);
         const { error } = await supabase.from('attendance_records').update({ checkout_timestamp: new Date().toISOString() }).in('id', recordIdsToCheckOut).is('checkout_timestamp', null);
         setLoadingAction(false);
         if (error) alert(`Error checking out all: ${error.message}`);
-        else {
-            refreshData();
-            setIsManageModalOpen(false);
-        }
+        else { refreshData(); setIsManageModalOpen(false); }
     };
     
     const handleManualAdd = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -556,67 +457,25 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         if (!selectedSession || !manualAddOpsId) return;
         setManualAddError(null);
         setLoadingAction(true);
-
         const worker = workers.find(w => w.opsId.toLowerCase() === manualAddOpsId.toLowerCase());
-        if (!worker || !worker.id) {
-            setManualAddError(`Worker with OpsID "${manualAddOpsId}" not found.`);
-            setLoadingAction(false);
-            return;
-        }
-
-        // VALIDATION 1: Duplicate in Current Session
+        if (!worker || !worker.id) { setManualAddError(`Worker with OpsID "${manualAddOpsId}" not found.`); setLoadingAction(false); return; }
         const alreadyInSession = selectedSession.records.some(r => r.workerId === worker.id);
-        if (alreadyInSession) {
-             setManualAddError(`Worker ${worker.fullName} is already in this session.`);
-             setLoadingAction(false);
-             return;
-        }
-
-        // VALIDATION 2: 1 Attendance Per Day (Cross-Session)
-        const alreadyAttendedToday = attendanceHistory.some(session => 
-            session.date === selectedSession.date && 
-            session.records.some(r => r.workerId === worker.id)
-        );
-
-        if (alreadyAttendedToday) {
-             setManualAddError(`Worker ${worker.fullName} has already attended a session on ${selectedSession.date}. (Max 1x per hari)`);
-             setLoadingAction(false);
-             return;
-        }
-
+        if (alreadyInSession) { setManualAddError(`Worker ${worker.fullName} is already in this session.`); setLoadingAction(false); return; }
+        const alreadyAttendedToday = attendanceHistory.some(session => session.date === selectedSession.date && session.records.some(r => r.workerId === worker.id));
+        if (alreadyAttendedToday) { setManualAddError(`Worker ${worker.fullName} has already attended a session on ${selectedSession.date}. (Max 1x per hari)`); setLoadingAction(false); return; }
         const { data: newRecords, error } = await supabase.from('attendance_records').insert({
             session_id: selectedSession.id,
             worker_id: worker.id,
             timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
             manual_status: manualAddStatus === 'On Plan' ? null : manualAddStatus,
-            is_arrived: false // Manual Add starts as 'Sedang di jalan' usually, let admin check it.
+            is_arrived: false 
         }).select();
-
         setLoadingAction(false);
-
-        if (error) {
-            setManualAddError(`Error adding worker: ${error.message}`);
-        } else if (newRecords && newRecords.length > 0) {
+        if (error) setManualAddError(`Error adding worker: ${error.message}`);
+        else if (newRecords && newRecords.length > 0) {
             const newDbRecord = newRecords[0];
-            const newAttendanceRecord: AttendanceRecord = {
-                id: newDbRecord.id,
-                workerId: worker.id,
-                opsId: worker.opsId,
-                fullName: worker.fullName,
-                timestamp: newDbRecord.timestamp,
-                checkout_timestamp: newDbRecord.checkout_timestamp,
-                manual_status: newDbRecord.manual_status,
-                is_takeout: newDbRecord.is_takeout,
-                is_arrived: newDbRecord.is_arrived,
-            };
-
-            setAttendanceHistory(prevHistory =>
-                prevHistory.map(session =>
-                    session.id === selectedSession.id
-                        ? { ...session, records: [...session.records, newAttendanceRecord] }
-                        : session
-                )
-            );
+            const newAttendanceRecord: AttendanceRecord = { id: newDbRecord.id, workerId: worker.id, opsId: worker.opsId, fullName: worker.fullName, timestamp: newDbRecord.timestamp, checkout_timestamp: newDbRecord.checkout_timestamp, manual_status: newDbRecord.manual_status, is_takeout: newDbRecord.is_takeout, is_arrived: newDbRecord.is_arrived };
+            setAttendanceHistory(prevHistory => prevHistory.map(session => session.id === selectedSession.id ? { ...session, records: [...session.records, newAttendanceRecord] } : session));
             setManualAddOpsId('');
         }
     };
@@ -626,110 +485,54 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         if (!selectedSession) return;
         setLoadingAction(true);
         const formData = new FormData(e.currentTarget);
-        const updates = {
-            date: formData.get('date') as string,
-            division: formData.get('division') as string,
-            shiftTime: formData.get('shiftTime') as string,
-            shiftId: formData.get('shiftId') as string,
-            planMpp: parseInt(formData.get('planMpp') as string, 10),
-        };
-
-        const { error } = await supabase
-            .from('attendance_sessions')
-            .update(updates)
-            .eq('id', selectedSession.id);
-
+        const updates = { date: formData.get('date') as string, division: formData.get('division') as string, shiftTime: formData.get('shiftTime') as string, shiftId: formData.get('shiftId') as string, planMpp: parseInt(formData.get('planMpp') as string, 10) };
+        const { error } = await supabase.from('attendance_sessions').update(updates).eq('id', selectedSession.id);
         setLoadingAction(false);
-
-        if (error) {
-            alert(`Error updating session: ${error.message}`);
-        } else {
-            // Update local state
-            setAttendanceHistory(prev => prev.map(s => 
-                s.id === selectedSession.id ? { ...s, ...updates } : s
-            ));
-            // Update selected session to reflect changes immediately in the view
-            setSelectedSession(prev => prev ? { ...prev, ...updates } : null);
-            setIsEditingSession(false);
-        }
+        if (error) alert(`Error updating session: ${error.message}`);
+        else { setAttendanceHistory(prev => prev.map(s => s.id === selectedSession.id ? { ...s, ...updates } : s)); setSelectedSession(prev => prev ? { ...prev, ...updates } : null); setIsEditingSession(false); }
     };
     
     const openQrModal = (record: AttendanceRecord) => {
         const worker = workers.find(w => w.id === record.workerId);
-        const department = worker ? worker.department : '-';
-        
-        setQrWorkerData({
-            fullName: record.fullName,
-            opsId: record.opsId,
-            department: department
-        });
+        setQrWorkerData({ fullName: record.fullName, opsId: record.opsId, department: worker ? worker.department : '-' });
         setQrCodeUrl('');
         setIsQrModalOpen(true);
-        QRCode.toDataURL(record.opsId, { width: 300, margin: 2 })
-            .then(url => setQrCodeUrl(url))
-            .catch(err => console.error("Error generating QR", err));
+        QRCode.toDataURL(record.opsId, { width: 300, margin: 2 }).then(url => setQrCodeUrl(url));
     };
 
-    const handlePrintQr = () => {
-        window.print();
+    // Fix: Defined handleOpenReportModal to set the selected month and open report modal
+    const handleOpenReportModal = (monthIndex: number) => {
+        setSelectedReportMonth({ month: monthIndex, year: new Date().getFullYear() });
+        setIsReportModalOpen(true);
     };
 
     const currentMonthReports = useMemo(() => {
         const today = new Date();
         const year = today.getFullYear();
         const month = today.getMonth();
-        const period1Start = new Date(year, month, 1);
-        const period1End = new Date(year, month, 15, 23, 59, 59, 999);
-        const period2Start = new Date(year, month, 16);
-        const period2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
         return {
-            period1: generatePeriodicReport(attendanceHistory, workers, period1Start, period1End),
-            period2: generatePeriodicReport(attendanceHistory, workers, period2Start, period2End)
+            period1: generatePeriodicReport(attendanceHistory, workers, new Date(year, month, 1), new Date(year, month, 15, 23, 59, 59, 999)),
+            period2: generatePeriodicReport(attendanceHistory, workers, new Date(year, month, 16), new Date(year, month + 1, 0, 23, 59, 59, 999))
         };
     }, [attendanceHistory, workers]);
 
     const modalReportData = useMemo(() => {
         if (!selectedReportMonth) return null;
         const { month, year } = selectedReportMonth;
-        const modalPeriod1Start = new Date(year, month, 1);
-        const modalPeriod1End = new Date(year, month, 15, 23, 59, 59, 999);
-        const modalPeriod2Start = new Date(year, month, 16);
-        const modalPeriod2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
         return {
-            period1: generatePeriodicReport(attendanceHistory, workers, modalPeriod1Start, modalPeriod1End),
-            period2: generatePeriodicReport(attendanceHistory, workers, modalPeriod2Start, modalPeriod2End)
+            period1: generatePeriodicReport(attendanceHistory, workers, new Date(year, month, 1), new Date(year, month, 15, 23, 59, 59, 999)),
+            period2: generatePeriodicReport(attendanceHistory, workers, new Date(year, month, 16), new Date(year, month + 1, 0, 23, 59, 59, 999))
         };
     }, [selectedReportMonth, attendanceHistory, workers]);
-
-    const handleOpenReportModal = (monthIndex: number) => {
-        setSelectedReportMonth({ month: monthIndex, year: new Date().getFullYear() });
-        setIsReportModalOpen(true);
-    };
 
     const handleWorkerClickInReport = (workerId: string, workerName: string, period: string, startDate: Date, endDate: Date) => {
         const relevantSessions = attendanceHistory.filter(session => {
             const sessionDate = new Date(session.date + 'T00:00:00');
             return sessionDate >= startDate && sessionDate <= endDate;
         });
-
-        const attendanceDetails = relevantSessions
-            // LOGIC UPDATE: Filter for Physical Presence in Report Drilldown
-            .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout && record.is_arrived))
-            .map(session => ({
-                date: session.date,
-                shiftTime: session.shiftTime,
-                division: session.division
-            }))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
+        const attendanceDetails = relevantSessions.filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout && record.is_arrived)).map(session => ({ date: session.date, shiftTime: session.shiftTime, division: session.division })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}-${item.division}`, item])).values());
-
-        setDetailReportData({
-            workerName,
-            period,
-            dates: uniqueDetails,
-            total: uniqueDetails.length
-        });
+        setDetailReportData({ workerName, period, dates: uniqueDetails, total: uniqueDetails.length });
         setIsDetailReportModalOpen(true);
     };
 
@@ -738,49 +541,31 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const handleCopyOpsIdsOnly = () => {
       if (!selectedSession) return;
       const opsIdsToCopy = selectedSession.records
-          // Copy only present workers
           .filter(record => !record.is_takeout && record.is_arrived)
-          .map(record => record.opsId)
-          .join('\n');
+          .map(record => String(record.opsId).trim())
+          .join('\r\n'); // Use standard Windows line endings for better spreadsheet pasting
       
       if (opsIdsToCopy) {
           navigator.clipboard.writeText(opsIdsToCopy).then(() => {
               setCopyFeedback('ops');
-              setTimeout(() => {
-                  setCopyFeedback(null);
-                  setIsCopyDropdownOpen(false);
-              }, 1500);
-          }, (err) => {
-              alert('Gagal menyalin OpsIDs.');
-              console.error('Copy failed', err);
+              setTimeout(() => { setCopyFeedback(null); setIsCopyDropdownOpen(false); }, 1500);
           });
-      } else {
-          alert('Tidak ada OpsID yang hadir (dicentang) untuk disalin.');
-      }
+      } else alert('Tidak ada data yang hadir untuk disalin.');
     };
 
     const handleCopyExcelFormat = () => {
         if (!selectedSession) return;
         const textToCopy = selectedSession.records
-            // Copy only present workers
             .filter(record => !record.is_takeout && record.is_arrived)
-            .map(record => `${record.opsId}\t${record.opsId}\t${selectedSession.shiftId}\tSUNTER DC`)
-            .join('\n');
+            .map(record => `${String(record.opsId).trim()}\t${String(record.opsId).trim()}\t${selectedSession.shiftId}\tSUNTER DC`)
+            .join('\r\n');
         
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy).then(() => {
                 setCopyFeedback('excel');
-                setTimeout(() => {
-                    setCopyFeedback(null);
-                    setIsCopyDropdownOpen(false);
-                }, 1500);
-            }, (err) => {
-                alert('Gagal menyalin data.');
-                console.error('Copy failed', err);
+                setTimeout(() => { setCopyFeedback(null); setIsCopyDropdownOpen(false); }, 1500);
             });
-        } else {
-            alert('Tidak ada data yang hadir (dicentang) untuk disalin.');
-        }
+        } else alert('Tidak ada data yang hadir untuk disalin.');
     };
 
     return (
@@ -788,106 +573,91 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
                 <div className="flex flex-wrap gap-2">
-                     <button onClick={() => downloadReport('xlsx')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
+                     <button onClick={() => downloadReport('xlsx')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all shadow-sm hover:shadow-md">
                         <DownloadIcon /> Excel
                     </button>
-                    <button onClick={() => downloadReport('pdf')} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
+                    <button onClick={() => downloadReport('pdf')} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all shadow-sm hover:shadow-md">
                         <DownloadIcon /> PDF
                     </button>
                 </div>
             </div>
 
-            <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
-                    <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
-                    <p className="text-sm text-gray-500">{formattedDate}</p>
+            <div className="bg-white p-6 rounded-2xl shadow-xl shadow-gray-100 border border-gray-100 border-t-4 border-blue-600">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-2">
+                    <h2 className="text-lg font-black text-gray-900 tracking-tight uppercase">Ringkasan Kehadiran</h2>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date())}</p>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
-                    <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
-                    <SummaryItem label="Bulan Ini" stats={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
-                    <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
-                    <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
+                    <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-50" textColor="text-blue-800" />
+                    <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-50" textColor="text-green-800" />
+                    <SummaryItem label="Bulan Ini" stats={summaryCounts.thisMonth} bgColor="bg-indigo-50" textColor="text-indigo-800" />
+                    <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-50" textColor="text-yellow-800" />
+                    <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-50" textColor="text-purple-800" />
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <StatCard title="Daily Worker Active" value={activeWorkers} description="Total active workers" borderColor="border-red-500" />
-                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentPeriod1} description="Based on current month" borderColor="border-green-500" />
-                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentPeriod2} description="Based on current month" borderColor="border-yellow-500" />
+                <StatCard title="Daily Worker Active" value={activeWorkersCount} description="Total active workers" borderColor="border-red-500" />
+                <StatCard title="Fulfillment Periode 1-15" value={calculateFulfillment(1, 15)} description="Based on current month" borderColor="border-green-500" />
+                <StatCard title="Fulfillment Periode 16-31" value={calculateFulfillment(16, 31)} description="Based on current month" borderColor="border-yellow-500" />
             </div>
 
-             <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-t-4 border-indigo-500 transition-shadow duration-300 hover:shadow-xl">
-                 <div className="p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History (Bulan Ini)</h2>
+             <div className="bg-white rounded-2xl shadow-xl shadow-gray-100 border border-gray-100 overflow-hidden">
+                 <div className="p-6 border-b border-gray-50">
+                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Attendance History (Bulan Ini)</h2>
                  </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
-                        <thead className="bg-blue-600 text-white">
+                        <thead className="bg-blue-600 text-white uppercase text-[10px]">
                             <tr>
-                                <th className="p-3 font-semibold rounded-tl-lg">Date</th>
-                                <th className="p-3 font-semibold">Tipe</th>
-                                <th className="p-3 font-semibold">Divisi</th>
-                                <th className="p-3 font-semibold">Shift</th>
-                                <th className="p-3 font-semibold text-center">Plan</th>
-                                <th className="p-3 font-semibold text-center">Actual</th>
-                                <th className="p-3 font-semibold text-center">Gap</th>
-                                <th className="p-3 font-semibold text-center">Status</th>
-                                <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
+                                <th className="p-4 font-black tracking-widest">Date</th>
+                                <th className="p-4 font-black tracking-widest">Tipe</th>
+                                <th className="p-4 font-black tracking-widest">Divisi</th>
+                                <th className="p-4 font-black tracking-widest">Shift</th>
+                                <th className="p-4 font-black tracking-widest text-center">Plan</th>
+                                <th className="p-4 font-black tracking-widest text-center">Actual</th>
+                                <th className="p-4 font-black tracking-widest text-center">Gap</th>
+                                <th className="p-4 font-black tracking-widest text-center">Status</th>
+                                <th className="p-4 font-black tracking-widest text-center">Actions</th>
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-200">
+                        <tbody className="divide-y divide-gray-50">
                             {currentMonthHistory.length > 0 ? (
                                 currentMonthHistory.map((session) => {
-                                    // LOGIC UPDATE: Actual calculation based on physical presence
                                     const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
                                     const planned = session.planMpp;
                                     const gap = actual - planned;
-                                    
                                     let status = 'GAP';
                                     if (actual === planned) status = 'FULL FILL';
                                     if (actual > planned) status = 'FULL FILL BUFFER';
-                                    
-                                    // Session Type Badge logic
                                     const sessionType = session.session_type || 'MANUAL';
-                                    const sessionTypeColor = sessionType === 'PUBLIC' 
-                                        ? 'bg-purple-100 text-purple-700' 
-                                        : 'bg-gray-100 text-gray-700';
-
+                                    const sessionTypeColor = sessionType === 'PUBLIC' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700';
                                     return (
-                                        <tr key={session.id} className="hover:bg-gray-50">
-                                            <td className="p-3">{session.date}</td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${sessionTypeColor}`}>
-                                                    {sessionType}
-                                                </span>
-                                            </td>
-                                            <td className="p-3">{session.division}</td>
-                                            <td className="p-3">{session.shiftTime}</td>
-                                            <td className="p-3 text-center">{planned}</td>
-                                            <td className="p-3 text-center font-bold text-gray-800">{actual}</td>
-                                            <td className={`p-3 text-center font-bold ${gap >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {gap > 0 ? `+${gap}` : gap}
-                                            </td>
-                                            <td className="p-3 text-center">
-                                                <span className={`px-2 py-1 text-xs rounded-full font-bold ${
+                                        <tr key={session.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <td className="p-4 font-bold text-gray-700">{session.date}</td>
+                                            <td className="p-4"><span className={`px-2 py-0.5 text-[9px] font-black rounded uppercase ${sessionTypeColor}`}>{sessionType}</span></td>
+                                            <td className="p-4 font-bold text-gray-700">{session.division}</td>
+                                            <td className="p-4 font-bold text-gray-700">{session.shiftTime}</td>
+                                            <td className="p-4 text-center font-bold text-gray-500">{planned}</td>
+                                            <td className="p-4 text-center font-black text-gray-900">{actual}</td>
+                                            <td className={`p-4 text-center font-black ${gap >= 0 ? 'text-green-600' : 'text-red-600'}`}>{gap > 0 ? `+${gap}` : gap}</td>
+                                            <td className="p-4 text-center">
+                                                <span className={`px-2 py-1 text-[9px] rounded-full font-black uppercase ${
                                                     status === 'FULL FILL' ? 'bg-green-100 text-green-700' :
                                                     status === 'GAP' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
                                                 }`}>{status}</span>
                                             </td>
-                                            <td className="p-3">
+                                            <td className="p-4">
                                                 <div className="flex justify-center items-center gap-3">
-                                                    <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700" aria-label="Manage Session"><ViewIcon /></button>
-                                                    <button onClick={() => openDeleteSessionModal(session)} className="text-red-500 hover:text-red-700" aria-label="Delete Session"><DeleteIcon /></button>
+                                                    <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700 transition-transform active:scale-90" aria-label="Manage Session"><ViewIcon /></button>
+                                                    <button onClick={() => openDeleteSessionModal(session)} className="text-red-500 hover:text-red-700 transition-transform active:scale-90" aria-label="Delete Session"><DeleteIcon /></button>
                                                 </div>
                                             </td>
                                         </tr>
                                     );
                                 })
                             ) : (
-                                <tr>
-                                    <td colSpan={9} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
-                                </tr>
+                                <tr><td colSpan={9} className="text-center p-8 text-gray-400 font-bold uppercase tracking-widest text-[10px]">Belum ada riwayat bulan ini.</td></tr>
                             )}
                         </tbody>
                     </table>
@@ -895,21 +665,21 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-purple-500 transition-shadow duration-300 hover:shadow-xl">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Laporan Periode Bulan Ini</h2>
+                <div className="bg-white p-6 rounded-2xl shadow-xl shadow-gray-100 border border-gray-100">
+                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-6">Laporan Periode Bulan Ini</h2>
                     <div className="flex flex-col md:flex-row gap-6">
                        <ReportList title="Periode 1-15" data={currentMonthReports.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date(new Date().getFullYear(), new Date().getMonth(), 15, 23, 59, 59, 999))} />
                        <ReportList title="Periode 16-31" data={currentMonthReports.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 16), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999))} />
                     </div>
                 </div>
-                 <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-pink-500 transition-shadow duration-300 hover:shadow-xl">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Arsip Laporan Bulanan</h2>
+                 <div className="bg-white p-6 rounded-2xl shadow-xl shadow-gray-100 border border-gray-100">
+                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight mb-6">Arsip Laporan Bulanan</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                         {months.map((month, index) => (
                              <button 
                                 key={month}
                                 onClick={() => handleOpenReportModal(index)}
-                                className="bg-gray-100 hover:bg-blue-600 text-gray-700 hover:text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 text-sm border border-gray-200 hover:border-blue-600"
+                                className="bg-gray-50 hover:bg-blue-600 text-gray-600 hover:text-white font-black py-3 px-3 rounded-xl transition-all duration-200 text-[10px] uppercase tracking-widest border border-gray-100"
                              >
                                 {month}
                              </button>
@@ -922,141 +692,74 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 {selectedSession && (
                     <div className="space-y-4">
                         {isEditingSession ? (
-                            <form onSubmit={handleUpdateSession} className="space-y-4 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <form onSubmit={handleUpdateSession} className="space-y-4 mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
-                                        <input name="date" type="date" defaultValue={selectedSession.date} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Divisi</label>
-                                        <select name="division" defaultValue={selectedSession.division} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            {divisionOpts.map(d => <option key={d} value={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift Jam</label>
-                                         <select name="shiftTime" defaultValue={selectedSession.shiftTime} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                             {shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}
-                                         </select>
-                                    </div>
-                                    <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift ID</label>
-                                         <select name="shiftId" defaultValue={selectedSession.shiftId} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            {shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
-                                         </select>
-                                    </div>
-                                     <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Plan MPP</label>
-                                         <input name="planMpp" type="number" defaultValue={selectedSession.planMpp} min="1" required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                    </div>
+                                    <div><label className="block text-[10px] font-black text-gray-400 uppercase ml-1 mb-1.5">Tanggal</label><input name="date" type="date" defaultValue={selectedSession.date} required className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
+                                    <div><label className="block text-[10px] font-black text-gray-400 uppercase ml-1 mb-1.5">Divisi</label><select name="division" defaultValue={selectedSession.division} required className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold">{divisionOpts.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+                                    <div><label className="block text-[10px] font-black text-gray-400 uppercase ml-1 mb-1.5">Shift Jam</label><select name="shiftTime" defaultValue={selectedSession.shiftTime} required className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold">{shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}</select></div>
+                                    <div><label className="block text-[10px] font-black text-gray-400 uppercase ml-1 mb-1.5">Shift ID</label><select name="shiftId" defaultValue={selectedSession.shiftId} required className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold">{shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}</select></div>
+                                    <div><label className="block text-[10px] font-black text-gray-400 uppercase ml-1 mb-1.5">Plan MPP</label><input name="planMpp" type="number" defaultValue={selectedSession.planMpp} min="1" required className="w-full bg-white border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold" /></div>
                                 </div>
-                                <div className="flex justify-end gap-2 mt-4">
-                                    <button type="button" onClick={() => setIsEditingSession(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
-                                    <button type="submit" disabled={loadingAction} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save Changes</button>
-                                </div>
+                                <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={() => setIsEditingSession(false)} className="px-5 py-2 bg-white text-gray-500 rounded-xl hover:bg-gray-100 font-black uppercase text-[10px] tracking-widest border border-gray-200">Cancel</button><button type="submit" disabled={loadingAction} className="px-5 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-blue-100">Save Changes</button></div>
                             </form>
                         ) : (
-                            <div className="flex justify-between items-start bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4 w-full">
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Tanggal</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.date}</p>
-                                    </div>
-                                    <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Divisi</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.division}</p>
-                                    </div>
-                                     <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.shiftTime}</p>
-                                    </div>
-                                     <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Plan MPP</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.planMpp}</p>
-                                    </div>
-                                     <div className="col-span-2 md:col-span-4">
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift ID</p>
-                                        <p className="text-sm font-mono text-gray-600">{selectedSession.shiftId}</p>
-                                    </div>
+                            <div className="flex justify-between items-start bg-gray-50 p-5 rounded-2xl border border-gray-100 mb-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4 w-full uppercase">
+                                    <div><p className="text-[9px] font-black text-gray-400 tracking-widest">Tanggal</p><p className="font-black text-gray-800 text-sm">{selectedSession.date}</p></div>
+                                    <div><p className="text-[9px] font-black text-gray-400 tracking-widest">Divisi</p><p className="font-black text-gray-800 text-sm">{selectedSession.division}</p></div>
+                                    <div><p className="text-[9px] font-black text-gray-400 tracking-widest">Shift</p><p className="font-black text-gray-800 text-sm">{selectedSession.shiftTime}</p></div>
+                                    <div><p className="text-[9px] font-black text-gray-400 tracking-widest">Plan MPP</p><p className="font-black text-gray-800 text-sm">{selectedSession.planMpp}</p></div>
+                                    <div className="col-span-2 md:col-span-4 border-t border-gray-200 pt-3"><p className="text-[9px] font-black text-gray-400 tracking-widest">Shift ID</p><p className="text-xs font-black font-mono text-blue-600">{selectedSession.shiftId}</p></div>
                                 </div>
-                                <button onClick={() => setIsEditingSession(true)} className="ml-4 p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="Edit Session Details">
-                                    <EditIcon />
-                                </button>
+                                <button onClick={() => setIsEditingSession(true)} className="ml-4 p-2.5 bg-white text-blue-600 hover:bg-blue-50 border border-gray-100 rounded-xl transition-all shadow-sm active:scale-90"><EditIcon /></button>
                             </div>
                         )}
 
-                        <div className="overflow-x-auto border rounded-lg max-h-[400px]">
+                        <div className="overflow-x-auto border border-gray-100 rounded-2xl max-h-[400px] no-scrollbar">
                             <table className="w-full text-left text-sm relative">
-                                <thead className="bg-blue-600 text-white sticky top-0 z-10">
+                                <thead className="bg-blue-600 text-white sticky top-0 z-10 uppercase text-[9px]">
                                     <tr>
-                                        <th className="p-2 font-semibold">Kehadiran Fisik</th>
-                                        <th className="p-2 font-semibold">OpsID</th>
-                                        <th className="p-2 font-semibold">Nama Lengkap</th>
-                                        <th className="p-2 font-semibold">Jam Masuk</th>
-                                        <th className="p-2 font-semibold">Total Jam</th>
-                                        <th className="p-2 font-semibold">Status Plan</th>
-                                        <th className="p-2 font-semibold text-center">Aksi</th>
+                                        <th className="p-3 font-black tracking-widest text-center">Fisik</th>
+                                        <th className="p-3 font-black tracking-widest">OpsID</th>
+                                        <th className="p-3 font-black tracking-widest">Nama Lengkap</th>
+                                        <th className="p-3 font-black tracking-widest">Jam Masuk</th>
+                                        <th className="p-3 font-black tracking-widest">Total Jam</th>
+                                        <th className="p-3 font-black tracking-widest">Status Plan</th>
+                                        <th className="p-3 font-black tracking-widest text-center">Aksi</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200">
+                                <tbody className="divide-y divide-gray-50">
                                     {selectedSession.records.map(record => {
                                         const now = new Date().getTime();
                                         const checkinTime = new Date(record.timestamp).getTime();
                                         const nineHoursInMillis = 9 * 60 * 60 * 1000;
-                                        let effectiveCheckoutTimeStr: string | null = record.checkout_timestamp || null;
-                                        let isAutoCheckout = false;
-                                        if (!effectiveCheckoutTimeStr && (now - checkinTime) > nineHoursInMillis) {
-                                            effectiveCheckoutTimeStr = new Date(checkinTime + nineHoursInMillis).toISOString();
-                                            isAutoCheckout = true;
-                                        }
-                                        const isCheckedOut = !!record.checkout_timestamp || isAutoCheckout;
-                                        
-                                        // Status Plan Logic
-                                        let statusText = 'On Plan';
-                                        let statusColor = 'bg-green-100 text-green-800';
-                                        if(record.is_takeout) {
-                                            statusText = 'Take Out';
-                                            statusColor = 'bg-gray-200 text-gray-600';
-                                        } else if (record.manual_status === 'Partial') {
-                                            statusText = 'Partial';
-                                            statusColor = 'bg-orange-100 text-orange-800';
-                                        } else if (record.manual_status === 'Buffer') {
-                                            statusText = 'Buffer';
-                                            statusColor = 'bg-yellow-100 text-yellow-800';
-                                        }
-                                        
-                                        // Physical Presence Logic
-                                        const isArrived = record.is_arrived ?? true; // Default true if legacy data
-
+                                        let effectiveCheckoutTimeStr = record.checkout_timestamp || null;
+                                        if (!effectiveCheckoutTimeStr && (now - checkinTime) > nineHoursInMillis) effectiveCheckoutTimeStr = new Date(checkinTime + nineHoursInMillis).toISOString();
+                                        const isCheckedOut = !!record.checkout_timestamp || !!effectiveCheckoutTimeStr;
+                                        let statusText = 'On Plan', statusColor = 'bg-green-100 text-green-800';
+                                        if(record.is_takeout) { statusText = 'Take Out'; statusColor = 'bg-gray-100 text-gray-500'; }
+                                        else if (record.manual_status === 'Partial') { statusText = 'Partial'; statusColor = 'bg-orange-100 text-orange-800'; }
+                                        else if (record.manual_status === 'Buffer') { statusText = 'Buffer'; statusColor = 'bg-yellow-100 text-yellow-800'; }
+                                        const isArrived = record.is_arrived ?? true;
                                         return (
-                                            <tr key={record.id} className={`hover:bg-gray-50 ${record.is_takeout ? 'opacity-60 bg-gray-100' : ''}`}>
-                                                <td className="p-2 text-center">
+                                            <tr key={record.id} className={`hover:bg-blue-50/30 transition-colors ${record.is_takeout ? 'opacity-50' : ''}`}>
+                                                <td className="p-3 text-center">
                                                     <div className="flex flex-col items-center">
-                                                        <input 
-                                                            type="checkbox" 
-                                                            checked={isArrived} 
-                                                            onChange={() => handleToggleArrival(record.id, isArrived)}
-                                                            className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                                                        />
-                                                        <span className={`text-[10px] font-bold mt-1 px-1.5 py-0.5 rounded ${isArrived ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>
-                                                            {isArrived ? 'HADIR' : 'OTW'}
-                                                        </span>
+                                                        <input type="checkbox" checked={isArrived} onChange={() => handleToggleArrival(record.id, isArrived)} className="w-5 h-5 text-blue-600 rounded-lg focus:ring-blue-500 border-gray-300 transition-all cursor-pointer" />
+                                                        <span className={`text-[8px] font-black mt-1 px-1.5 py-0.5 rounded uppercase ${isArrived ? 'bg-green-50 text-green-700' : 'bg-yellow-50 text-yellow-700'}`}>{isArrived ? 'Hadir' : 'OTW'}</span>
                                                     </div>
                                                 </td>
-                                                <td className="p-2 text-gray-900 font-mono">{record.opsId}</td>
-                                                <td className="p-2">{record.fullName}</td>
-                                                <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
-                                                <td className="p-2 font-mono">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
-                                                <td className="p-2"><span className={`px-2 py-1 text-xs rounded-full font-semibold ${statusColor}`}>{statusText}</span></td>
-                                                <td className="p-2">
+                                                <td className="p-3 text-black font-mono font-black">{record.opsId}</td>
+                                                <td className="p-3 text-gray-800 font-bold uppercase text-xs">{record.fullName}</td>
+                                                <td className="p-3 font-bold text-gray-500">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
+                                                <td className="p-3 font-black font-mono text-gray-800 text-xs">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
+                                                <td className="p-3"><span className={`px-2 py-0.5 text-[9px] rounded-full font-black uppercase ${statusColor}`}>{statusText}</span></td>
+                                                <td className="p-3">
                                                     <div className="flex justify-center items-center gap-2">
-                                                        <button onClick={() => openQrModal(record)} className="text-gray-600 hover:text-black p-1" title="Print QR Code">
-                                                            <PrintIcon />
-                                                        </button>
-                                                        <button onClick={() => handleAction('takeout', record.id)} disabled={loadingAction || record.is_takeout} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">TakeOut</button>
-                                                        <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || isCheckedOut || record.is_takeout} className="text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">CheckOut</button>
-                                                        <button onClick={() => openDeleteRecordModal(record)} disabled={loadingAction} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" aria-label={`Remove ${record.fullName}`}><DeleteIcon /></button>
+                                                        <button onClick={() => openQrModal(record)} className="text-gray-400 hover:text-gray-900 transition-transform active:scale-90"><PrintIcon /></button>
+                                                        <button onClick={() => handleAction('takeout', record.id)} disabled={loadingAction || record.is_takeout} className="text-[9px] bg-gray-100 hover:bg-gray-200 text-gray-600 font-black py-1 px-2 rounded-lg uppercase tracking-widest disabled:opacity-30">TakeOut</button>
+                                                        <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || !!record.checkout_timestamp || record.is_takeout} className="text-[9px] bg-green-500 hover:bg-green-600 text-white font-black py-1 px-2 rounded-lg uppercase tracking-widest disabled:opacity-30">CheckOut</button>
+                                                        <button onClick={() => openDeleteRecordModal(record)} disabled={loadingAction} className="text-red-400 hover:text-red-700 transition-transform active:scale-90"><DeleteIcon /></button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1065,192 +768,126 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </tbody>
                             </table>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200">
-                            <form onSubmit={handleManualAdd} className="space-y-3">
-                               <h4 className="text-md font-semibold text-gray-700">Tambah Karyawan Manual</h4>
-                               {manualAddError && <p className="text-red-600 bg-red-50 p-2 rounded-lg text-sm">{manualAddError}</p>}
-                               <div className="flex flex-col sm:flex-row gap-2">
-                                   <input type="text" value={manualAddOpsId} onChange={(e) => setManualAddOpsId(e.target.value)} placeholder="OpsID Karyawan" className="flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
-                                   <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer' | 'On Plan')} className="bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <div className="mt-4 pt-4 border-t border-gray-100">
+                            <form onSubmit={handleManualAdd} className="space-y-4">
+                               <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Tambah Karyawan Manual</h4>
+                               {manualAddError && <p className="text-red-600 bg-red-50 p-3 rounded-xl text-xs font-bold border border-red-100">{manualAddError}</p>}
+                               <div className="flex flex-col sm:flex-row gap-3">
+                                   <input type="text" value={manualAddOpsId} onChange={(e) => setManualAddOpsId(e.target.value)} placeholder="OpsID Karyawan" className="flex-grow bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold" required />
+                                   <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as any)} className="bg-gray-50 border border-gray-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold">
                                        <option value="On Plan">On Plan</option>
                                        <option value="Partial">Partial</option>
                                        <option value="Buffer">Buffer</option>
                                    </select>
-                                   <button type="submit" disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50">
-                                       {loadingAction ? '...' : 'Add'}
-                                   </button>
+                                   <button type="submit" disabled={loadingAction} className="bg-blue-600 hover:bg-blue-700 text-white font-black py-3 px-6 rounded-xl transition-all uppercase text-[10px] tracking-[0.2em] shadow-lg shadow-blue-100">Add</button>
                                </div>
-                               <p className="text-xs text-gray-500">Note: Karyawan yang ditambah manual akan berstatus "Sedang di jalan" (OTW). Centang kehadiran fisik jika sudah sampai.</p>
                            </form>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
+                        <div className="mt-6 pt-6 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                             <div className="relative" ref={dropdownRef}>
-                                <button 
-                                    onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
-                                    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
-                                >
-                                    <CopyIcon /> Salin Data
-                                    <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                <button onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white font-black py-3 px-6 rounded-xl transition-all uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-gray-200">
+                                    <CopyIcon className="w-4 h-4" /> Salin Data
+                                    <svg className={`w-3 h-3 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
                                 </button>
                                 {isCopyDropdownOpen && (
-                                    <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
-                                        <button 
-                                            onClick={handleCopyOpsIdsOnly}
-                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
-                                                copyFeedback === 'ops'
-                                                ? 'bg-green-500 text-white font-bold'
-                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                            }`}
-                                        >
-                                            {copyFeedback === 'ops' ? (
-                                                <div className="flex items-center gap-2">
-                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                     Tersalin!
-                                                </div>
-                                            ) : (
-                                                "Salin OpsID Saja"
-                                            )}
+                                    <div className="absolute bottom-full mb-3 left-0 w-64 bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-50 animate-fade-in-up overflow-hidden">
+                                        <button onClick={handleCopyOpsIdsOnly} className={`w-full text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${copyFeedback === 'ops' ? 'bg-green-500 text-white' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'}`}>
+                                            {copyFeedback === 'ops' ? "Tersalin!" : "Salin OpsID Saja"}
                                         </button>
-                                        <button 
-                                            onClick={handleCopyExcelFormat}
-                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
-                                                copyFeedback === 'excel'
-                                                ? 'bg-green-500 text-white font-bold'
-                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                            }`}
-                                        >
-                                            {copyFeedback === 'excel' ? (
-                                                <div className="flex items-center gap-2">
-                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                     Tersalin!
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    Salin Format Excel
-                                                    <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
-                                                </>
-                                            )}
+                                        <button onClick={handleCopyExcelFormat} className={`w-full text-left px-5 py-4 text-[10px] font-black uppercase tracking-widest transition-all ${copyFeedback === 'excel' ? 'bg-green-500 text-white' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700 border-t border-gray-50'}`}>
+                                            {copyFeedback === 'excel' ? "Tersalin!" : "Salin Format Excel"}
                                         </button>
                                     </div>
                                 )}
                             </div>
-                            <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
-                            </button>
+                            <button onClick={handleCheckOutAll} className="bg-green-600 hover:bg-green-700 text-white font-black py-3 px-6 rounded-xl transition-all uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-green-100">Check Out Remaining</button>
                         </div>
                     </div>
                 )}
             </Modal>
 
-            <Modal isOpen={isDeleteSessionModalOpen} onClose={() => setIsDeleteSessionModalOpen(false)} title="Confirm Session Deletion">
-                {selectedSession && (
-                    <div>
-                        <p className="text-gray-600">Are you sure you want to delete the attendance session for <strong className="text-blue-600">{selectedSession.date} ({selectedSession.shiftTime})</strong>?</p>
-                        <p className="text-sm text-red-600 mt-2">This will remove all {selectedSession.records.length} attendance records for this session. This action cannot be undone.</p>
-                        <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setIsDeleteSessionModalOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
-                            <button onClick={handleDeleteSession} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
-                                {loadingAction ? 'Deleting...' : 'Delete Session'}
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </Modal>
-
-            <Modal isOpen={isDeleteRecordModalOpen} onClose={() => setIsDeleteRecordModalOpen(false)} title="Confirm Record Deletion">
-                {recordToDelete && (
-                    <div>
-                        <p className="text-gray-600">Are you sure you want to delete the attendance record for <strong className="text-blue-600">{recordToDelete.fullName}</strong>?</p>
-                        <p className="text-sm text-red-600 mt-2">This action is permanent and cannot be undone.</p>
-                        <div className="flex justify-end gap-4 mt-6">
-                            <button onClick={() => setIsDeleteRecordModalOpen(false)} className="py-2 px-4 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-semibold">Cancel</button>
-                            <button onClick={handleConfirmDeleteRecord} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white rounded-lg font-semibold" disabled={loadingAction}>
-                                {loadingAction ? 'Deleting...' : 'Delete Record'}
-                            </button>
-                        </div>
-                    </div>
-                )}
+            <Modal isOpen={isDeleteSessionModalOpen} onClose={() => setIsDeleteSessionModalOpen(false)} title="Hapus Sesi">
+                <div className="p-4"><p className="text-gray-600 font-bold">Yakin ingin menghapus sesi tanggal <span className="text-red-600">{selectedSession?.date}</span>?</p><div className="flex justify-end gap-3 mt-6"><button onClick={() => setIsDeleteSessionModalOpen(false)} className="px-5 py-2 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Batal</button><button onClick={handleDeleteSession} className="px-5 py-2 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-red-100">Ya, Hapus</button></div></div>
             </Modal>
             
-            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={`Laporan Detail Bulan ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}>
-                {modalReportData && selectedReportMonth && (
-                    <div className="flex flex-col md:flex-row gap-6">
-                        <ReportList title="Periode 1-15" data={modalReportData.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 1), new Date(selectedReportMonth.year, selectedReportMonth.month, 15, 23, 59, 59, 999))} />
-                        <ReportList title="Periode 16-31" data={modalReportData.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 16), new Date(selectedReportMonth.year, selectedReportMonth.month + 1, 0, 23, 59, 59, 999))} />
-                    </div>
-                )}
-            </Modal>
-            
-            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`} scrollable={false}>
-                {detailReportData && (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="shrink-0 border-b pb-2 mb-2">
-                             <p className="font-semibold text-gray-700 text-lg">{detailReportData.period}</p>
-                        </div>
-                        <div className="flex-1 overflow-y-auto border rounded-lg bg-white shadow-sm min-h-0">
-                             <ul className="divide-y divide-gray-100">
-                                {detailReportData.dates.length > 0 ? (
-                                    detailReportData.dates.map((item, index) => (
-                                        <li key={index} className="p-4 flex justify-between items-center hover:bg-blue-50 transition-colors duration-150">
-                                            <div className="flex flex-col">
-                                                <span className="font-medium text-gray-800 text-sm">
-                                                    {new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(item.date + 'T00:00:00'))}
-                                                </span>
-                                                <div className="mt-1">
-                                                     <span className="inline-block px-2 py-0.5 text-xs font-bold text-gray-600 bg-gray-200 rounded border border-gray-300 shadow-sm">
-                                                        {item.division}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span className="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200">
-                                                {item.shiftTime}
-                                            </span>
-                                        </li>
-                                    ))
-                                ) : (
-                                    <li className="p-6 text-center text-gray-500 italic">Tidak ada catatan kehadiran pada periode ini.</li>
-                                )}
-                             </ul>
-                        </div>
-                        <div className="shrink-0 mt-2">
-                            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200">
-                                 <span className="text-gray-600 font-medium">Total Kehadiran</span>
-                                 <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
+            <Modal isOpen={isDeleteRecordModalOpen} onClose={() => setIsDeleteRecordModalOpen(false)} title="Hapus Record">
+                <div className="p-4"><p className="text-gray-600 font-bold">Hapus data absen <span className="text-red-600">{recordToDelete?.fullName}</span>?</p><div className="flex justify-end gap-3 mt-6"><button onClick={() => setIsDeleteRecordModalOpen(false)} className="px-5 py-2 bg-gray-100 text-gray-500 rounded-xl font-black uppercase text-[10px]">Batal</button><button onClick={handleConfirmDeleteRecord} className="px-5 py-2 bg-red-600 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-red-100">Ya, Hapus</button></div></div>
             </Modal>
 
             <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
                 {qrWorkerData && (
-                    <div className="flex flex-col items-center justify-center p-4">
-                        <div id="printable-qr" className="flex flex-col items-center text-center">
-                            <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
-                            <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
-                                {qrCodeUrl ? (
-                                    <img src={qrCodeUrl} alt={`QR Code for ${qrWorkerData.opsId}`} className="w-64 h-auto max-w-full object-contain print:w-48 print:h-48" />
-                                ) : (
-                                    <div className="w-64 h-64 flex items-center justify-center text-gray-400 bg-gray-50 rounded">Generating QR...</div>
-                                )}
+                    <div className="flex flex-col items-center justify-center p-6">
+                        <div id="printable-qr" className="flex flex-col items-center text-center p-6 bg-white rounded-3xl border-2 border-dashed border-gray-100">
+                            <h1 className="text-xl font-black mb-4 hidden print:block text-black uppercase tracking-widest">ABSENSI NEXUS</h1>
+                            <div className="bg-white p-4 rounded-3xl border-4 border-blue-600 print:border-black flex flex-col items-center shadow-2xl">
+                                {qrCodeUrl ? <img src={qrCodeUrl} alt="QR" className="w-64 h-64 object-contain" /> : <div className="w-64 h-64 flex items-center justify-center text-gray-400 animate-pulse">Generating...</div>}
                             </div>
-                            <div className="mt-6 text-center">
-                                <h2 className="text-2xl font-bold text-gray-800 print:text-black print:text-xl">{qrWorkerData.fullName}</h2>
-                                <p className="text-lg text-black font-mono tracking-wider mt-1 print:text-black print:text-lg">{qrWorkerData.opsId}</p>
-                                <p className="text-sm text-gray-500 mt-2 print:hidden">{qrWorkerData.department}</p>
+                            <div className="mt-8">
+                                <h2 className="text-3xl font-black text-gray-900 print:text-black uppercase tracking-tight">{qrWorkerData.fullName}</h2>
+                                <p className="text-xl text-blue-600 font-black font-mono tracking-[0.2em] mt-2 print:text-black">{qrWorkerData.opsId}</p>
+                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.3em] mt-4">{qrWorkerData.department}</p>
                             </div>
                         </div>
+                        <div className="mt-10 flex gap-4 print:hidden no-print">
+                            <button onClick={() => window.print()} className="flex items-center gap-3 bg-slate-900 hover:bg-black text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-gray-200 uppercase text-[10px] tracking-widest"><PrintIcon /> Print Struk</button>
+                             <a href={qrCodeUrl} download={`${qrWorkerData.fullName}_QR.png`} className="flex items-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 px-8 rounded-2xl transition-all shadow-xl shadow-blue-100 uppercase text-[10px] tracking-widest"><DownloadIcon /> Save PNG</a>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
-                        <div className="mt-8 flex gap-3 print:hidden no-print">
-                            <button onClick={handlePrintQr} className="flex items-center gap-2 bg-gray-800 hover:bg-gray-900 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
-                                <PrintIcon /> Print Struk
-                            </button>
-                             <a href={qrCodeUrl} download={`${qrWorkerData.fullName}_QR.png`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg">
-                                <DownloadIcon /> Save Image
-                            </a>
+            {/* Added Modal for monthly report archives */}
+            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={`Laporan Bulanan: ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}>
+                {selectedReportMonth && modalReportData && (
+                    <div className="flex flex-col md:flex-row gap-6">
+                        <ReportList 
+                            title="Periode 1-15" 
+                            data={modalReportData.period1} 
+                            onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 1), new Date(selectedReportMonth.year, selectedReportMonth.month, 15, 23, 59, 59, 999))} 
+                        />
+                        <ReportList 
+                            title="Periode 16-31" 
+                            data={modalReportData.period2} 
+                            onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 16), new Date(selectedReportMonth.year, selectedReportMonth.month + 1, 0, 23, 59, 59, 999))} 
+                        />
+                    </div>
+                )}
+            </Modal>
+
+            {/* Added Modal for detailed attendance records per worker */}
+            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title="Detail Kehadiran">
+                {detailReportData && (
+                    <div className="space-y-4">
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Karyawan</p>
+                            <h3 className="text-xl font-black text-blue-900 uppercase">{detailReportData.workerName}</h3>
+                            <p className="text-sm font-bold text-blue-600 mt-1">{detailReportData.period}</p>
+                            <div className="mt-3 flex items-center gap-2">
+                                <span className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase">Total: {detailReportData.total} HK</span>
+                            </div>
                         </div>
-                        <div className="mt-4 text-xs text-gray-400 print:hidden text-center max-w-xs no-print">
-                            *Klik "Print Struk" untuk mencetak langsung ke printer thermal (58mm/80mm). Pastikan printer sudah terhubung.
+                        <div className="max-h-64 overflow-y-auto pr-2 no-scrollbar border border-gray-100 rounded-xl">
+                            <table className="w-full text-left text-xs">
+                                <thead className="bg-gray-50 sticky top-0 uppercase font-black text-gray-400">
+                                    <tr>
+                                        <th className="p-3">Tanggal</th>
+                                        <th className="p-3">Divisi</th>
+                                        <th className="p-3">Shift</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-50">
+                                    {detailReportData.dates.map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50/50">
+                                            <td className="p-3 font-bold text-gray-700">{item.date}</td>
+                                            <td className="p-3 font-black text-blue-600 uppercase">{item.division}</td>
+                                            <td className="p-3 text-gray-500 font-bold">{item.shiftTime}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="flex justify-end pt-2">
+                            <button onClick={() => setIsDetailReportModalOpen(false)} className="px-6 py-2 bg-gray-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-gray-200">Tutup</button>
                         </div>
                     </div>
                 )}
