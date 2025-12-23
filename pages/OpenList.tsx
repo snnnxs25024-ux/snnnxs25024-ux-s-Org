@@ -13,7 +13,7 @@ interface OpenListProps {
 // Fallbacks
 const defaultShiftIds = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
-    'SOCSTROPS0514', 'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
+    'SOCSTROPS0615', 'SOCSTROPS0716', 'SOCSTROPS0817', 'SOCSTROPS0918', 'SOCSTROPS1019', 'SOCSTROPS1120',
     'SOCSTROPS1221', 'SOCSTROPS1322', 'SOCSTROPS1423', 'SOCSTROPS1500', 'SOCSTROPS1601', 'SOCSTROPS1702',
     'SOCSTROPS1803', 'SOCSTROPS1904', 'SOCSTROPS2005', 'SOCSTROPS2106', 'SOCSTROPS2207', 'SOCSTROPS2308',
 ];
@@ -32,6 +32,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [autoClose, setAutoClose] = useState(true);
 
   // Dynamic Options
   const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
@@ -56,20 +57,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
-  // Try to restore an active OPEN session on mount
   useEffect(() => {
       const restoreSession = async () => {
           const today = getTodayString();
-          // Cari sesi OPEN hari ini yang TIPE-nya PUBLIC.
           const { data } = await supabase
               .from('attendance_sessions')
               .select('*')
               .eq('status', 'OPEN')
               .eq('date', today)
-              .eq('session_type', 'PUBLIC') // Filter specific for Open List
+              .eq('session_type', 'PUBLIC')
               .order('id', { ascending: false })
               .limit(1)
-              .single();
+              .maybeSingle();
           
           if (data) {
               setActiveSession({ ...data, records: [] });
@@ -78,11 +77,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       restoreSession();
   }, []);
 
-  // Realtime updates replacing polling
   useEffect(() => {
     if (!activeSession) return;
 
-    // 1. Initial Load of Records
     const fetchLiveRecords = async () => {
         const { data } = await supabase
           .from('attendance_records')
@@ -104,7 +101,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     };
     fetchLiveRecords();
 
-    // 2. Realtime Subscription
     const channel = supabase.channel(`open_list_${activeSession.id}`)
       .on(
         'postgres_changes',
@@ -149,8 +145,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       shiftTime: formData.get('shiftTime') as string,
       shiftId: formData.get('shiftId') as string,
       planMpp: parseInt(formData.get('planMpp') as string, 10),
+      auto_close: autoClose,
       status: 'OPEN' as const,
-      session_type: 'PUBLIC' as const // Explicitly mark as Public
+      session_type: 'PUBLIC' as const
     };
 
     const { error: insertError } = await supabase
@@ -168,35 +165,22 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const handleCloseSession = async () => {
       if (!activeSession) return;
-      
       const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini?");
       if (!confirmClose) return;
-
-      // Update status to CLOSED in DB
-      const { error } = await supabase
-        .from('attendance_sessions')
-        .update({ status: 'CLOSED' })
-        .eq('id', activeSession.id);
-
+      const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', activeSession.id);
       if (error) {
           alert("Gagal menutup sesi: " + error.message);
           return;
       }
-      
       const sessionId = activeSession.id;
-
-      // Clear local state
       setActiveSession(null);
       setLiveRecords([]);
-      
-      // REDIRECT KE DASHBOARD dan Buka Modal Manage Session
       window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
   };
 
   const getPublicLink = () => {
       if(!activeSession) return '';
-      const baseUrl = window.location.origin;
-      return `${baseUrl}/attend/${activeSession.id}`;
+      return `${window.location.origin}/attend/${activeSession.id}`;
   };
 
   const copyToClipboard = () => {
@@ -207,12 +191,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   const handleDeleteRecord = async (recordId: number) => {
       if(!confirm("Are you sure you want to remove this entry?")) return;
-      
       const { error } = await supabase.from('attendance_records').delete().eq('id', recordId);
       if(error) alert("Failed to delete");
-      else {
-          setLiveRecords(prev => prev.filter(r => r.id !== recordId));
-      }
+      else setLiveRecords(prev => prev.filter(r => r.id !== recordId));
   };
 
   return (
@@ -225,34 +206,50 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
              <form onSubmit={handleCreateSession} className="space-y-4 max-w-2xl">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Tanggal</label>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Tanggal</label>
                         <input type="date" name="sessionDate" defaultValue={getTodayString()} required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Divisi</label>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Divisi</label>
                         <select name="division" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
                           {divisionOpts.map(div => <option key={div} value={div}>{div}</option>)}
                         </select>
                     </div>
                     <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Shift Jam</label>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Shift Jam</label>
                         <select name="shiftTime" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
                         {shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}
                         </select>
                     </div>
                     <div>
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Shift ID</label>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Shift ID</label>
                         <select name="shiftId" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500">
                         {shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
                         </select>
                     </div>
                     <div className="md:col-span-2">
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Target Kuota (Plan MPP)</label>
+                        <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Target Kuota (Plan MPP)</label>
                         <input type="number" name="planMpp" min="1" placeholder="Masukkan angka kuota (misal: 50)" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
-                        <p className="text-xs text-gray-500 mt-1">*Jika absensi melebihi angka ini, status akan otomatis menjadi "Buffer".</p>
+                    </div>
+                    
+                    {/* TOGGLE AUTO CLOSE */}
+                    <div className="md:col-span-2 flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100">
+                        <div>
+                            <p className="font-black text-blue-900 text-xs uppercase tracking-widest">Tutup Sesi Otomatis</p>
+                            <p className="text-[10px] text-blue-600 font-bold mt-1 uppercase">Sesi otomatis CLOSED jika kuota terpenuhi</p>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input 
+                              type="checkbox" 
+                              checked={autoClose} 
+                              onChange={() => setAutoClose(!autoClose)} 
+                              className="sr-only peer" 
+                            />
+                            <div className="w-11 h-6 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
                     </div>
                 </div>
-                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors">
+                <button type="submit" disabled={isLoading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-lg transition-colors uppercase tracking-[0.2em] shadow-lg shadow-blue-100 mt-4">
                     {isLoading ? 'Membuat Link...' : 'Generate Link Absensi'}
                 </button>
                 {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
@@ -260,53 +257,58 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
          </div>
       ) : (
           <div className="space-y-6">
-              {/* Active Session Monitor */}
               <div className="bg-green-50 border border-green-200 rounded-xl p-6 animate-fade-in">
                   <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                       <div>
-                          <span className="bg-green-200 text-green-800 text-xs font-bold px-2 py-1 rounded-full animate-pulse">LIVE OPEN</span>
-                          <h2 className="text-2xl font-bold text-gray-800 mt-2">Sesi Aktif: {activeSession.division}</h2>
-                          <p className="text-gray-600">{activeSession.date} | {activeSession.shiftTime}</p>
-                          <p className="text-sm text-gray-500 font-mono mt-1">ID: {activeSession.shiftId}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="bg-green-200 text-green-800 text-[10px] font-black px-2 py-1 rounded-full animate-pulse uppercase tracking-widest">LIVE OPEN</span>
+                            {activeSession.auto_close && <span className="bg-blue-200 text-blue-800 text-[10px] font-black px-2 py-1 rounded-full uppercase tracking-widest">Auto-Close ON</span>}
+                          </div>
+                          <h2 className="text-2xl font-black text-gray-800 mt-2 uppercase tracking-tight">{activeSession.division}</h2>
+                          <p className="text-gray-600 font-bold">{activeSession.date} | {activeSession.shiftTime}</p>
+                          <p className="text-xs text-gray-500 font-mono mt-1">ID: {activeSession.shiftId}</p>
                       </div>
                       <div className="flex flex-col items-end gap-3">
                            <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm w-full md:w-auto">
-                               <input type="text" readOnly value={getPublicLink()} className="bg-transparent text-sm text-gray-600 w-48 md:w-64 outline-none" />
-                               <button onClick={copyToClipboard} className="text-blue-600 hover:text-blue-800 font-bold text-sm flex items-center gap-1">
+                               <input type="text" readOnly value={getPublicLink()} className="bg-transparent text-xs text-gray-600 w-48 md:w-64 outline-none font-bold" />
+                               <button onClick={copyToClipboard} className="text-blue-600 hover:text-blue-800 font-black text-xs flex items-center gap-1 uppercase">
                                    <CopyIcon /> {copySuccess ? 'Copied!' : 'Copy'}
                                </button>
                            </div>
-                           <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg shadow-sm">
+                           <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-black py-2 px-6 rounded-lg shadow-sm w-full md:w-auto uppercase text-xs tracking-widest">
                                Tutup Sesi
                            </button>
                       </div>
                   </div>
               </div>
 
-              {/* Stats & Table */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="bg-white p-4 rounded-lg shadow border border-t-4 border-blue-500">
-                      <p className="text-gray-500 text-sm font-bold uppercase">Total Hadir</p>
-                      <p className="text-3xl font-bold text-blue-600">{liveRecords.length}</p>
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Total Hadir</p>
+                      <p className="text-3xl font-black text-blue-600">{liveRecords.length}</p>
                   </div>
                   <div className="bg-white p-4 rounded-lg shadow border border-t-4 border-green-500">
-                      <p className="text-gray-500 text-sm font-bold uppercase">On Plan</p>
-                      <p className="text-3xl font-bold text-green-600">
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">On Plan</p>
+                      <p className="text-3xl font-black text-green-600">
                           {liveRecords.filter(r => !r.manual_status).length}
                       </p>
-                      <p className="text-xs text-gray-400">Kuota: {activeSession.planMpp}</p>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase">Kuota: {activeSession.planMpp}</p>
                   </div>
                   <div className="bg-white p-4 rounded-lg shadow border border-t-4 border-yellow-500">
-                      <p className="text-gray-500 text-sm font-bold uppercase">Buffer</p>
-                      <p className="text-3xl font-bold text-yellow-600">
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Buffer</p>
+                      <p className="text-3xl font-black text-yellow-600">
                            {liveRecords.filter(r => r.manual_status === 'Buffer').length}
                       </p>
                   </div>
               </div>
 
               <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
-                  <div className="p-4 border-b bg-gray-50">
-                      <h3 className="font-bold text-gray-700">Real-time Data Masuk</h3>
+                  <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
+                      <h3 className="font-black text-gray-700 uppercase text-xs tracking-[0.2em]">Real-time Monitor</h3>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Stream Active</span>
+                      </div>
                   </div>
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
@@ -322,22 +324,22 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                         <tbody className="divide-y divide-gray-100">
                             {liveRecords.map(rec => (
                                 <tr key={rec.id} className="hover:bg-blue-50 transition-colors">
-                                    <td className="p-4 font-mono text-gray-500">
+                                    <td className="p-4 font-mono text-gray-400 font-bold text-xs">
                                         {new Date(rec.scan_timestamp || rec.timestamp).toLocaleTimeString('id-ID')}
                                     </td>
-                                    <td className="p-4 font-mono font-bold text-black">{rec.opsId}</td>
-                                    <td className="p-4 font-semibold text-gray-800">{rec.fullName}</td>
+                                    <td className="p-4 font-mono font-black text-black">{rec.opsId}</td>
+                                    <td className="p-4 font-bold text-gray-800 uppercase text-xs">{rec.fullName}</td>
                                     <td className="p-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${
+                                        <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
                                             rec.manual_status === 'Buffer' 
-                                            ? 'bg-yellow-100 text-yellow-800' 
-                                            : 'bg-green-100 text-green-800'
+                                            ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 
+                                            : 'bg-green-100 text-green-800 border border-green-200'
                                         }`}>
                                             {rec.manual_status || 'On Plan'}
                                         </span>
                                     </td>
                                     <td className="p-4 text-center">
-                                        <button onClick={() => handleDeleteRecord(rec.id)} className="text-red-400 hover:text-red-600 transition-transform active:scale-90">
+                                        <button onClick={() => handleDeleteRecord(rec.id)} className="text-red-400 hover:text-red-600 transition-transform active:scale-90 p-1">
                                             <DeleteIcon />
                                         </button>
                                     </td>
@@ -345,8 +347,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                             ))}
                             {liveRecords.length === 0 && (
                                 <tr>
-                                    <td colSpan={5} className="p-8 text-center text-gray-400 italic">
-                                        Belum ada data masuk. Menunggu karyawan mengakses link...
+                                    <td colSpan={5} className="p-12 text-center text-gray-400 italic font-bold uppercase tracking-widest text-xs">
+                                        Menunggu pendaftar pertama masuk...
                                     </td>
                                 </tr>
                             )}
