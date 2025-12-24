@@ -1147,7 +1147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                         )}
 
-                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-[300px]">
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-[400px]">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
