@@ -970,76 +970,78 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                  <div className="p-4 sm:p-6">
                     <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History (Bulan Ini)</h2>
                  </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                        <thead className="bg-blue-600 text-white">
-                            <tr>
-                                <th className="p-3 font-semibold rounded-tl-lg">Date</th>
-                                <th className="p-3 font-semibold">Tipe</th>
-                                <th className="p-3 font-semibold">Divisi</th>
-                                <th className="p-3 font-semibold">Shift</th>
-                                <th className="p-3 font-semibold text-center">Plan</th>
-                                <th className="p-3 font-semibold text-center">Actual</th>
-                                <th className="p-3 font-semibold text-center">Gap</th>
-                                <th className="p-3 font-semibold text-center">Status</th>
-                                <th className="p-3 font-semibold text-center rounded-tr-lg">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {currentMonthHistory.length > 0 ? (
-                                currentMonthHistory.map((session) => {
-                                    // LOGIC UPDATE: Actual calculation based on physical presence
-                                    const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
-                                    const planned = session.planMpp;
-                                    const gap = actual - planned;
-                                    
-                                    let status = 'GAP';
-                                    if (actual === planned) status = 'FULL FILL';
-                                    if (actual > planned) status = 'FULL FILL BUFFER';
-                                    
-                                    // Session Type Badge logic
-                                    const sessionType = session.session_type || 'MANUAL';
-                                    const sessionTypeColor = sessionType === 'PUBLIC' 
-                                        ? 'bg-purple-100 text-purple-700' 
-                                        : 'bg-gray-100 text-gray-700';
-
-                                    return (
-                                        <tr key={session.id} className="hover:bg-gray-50">
-                                            <td className="p-3">{session.date}</td>
-                                            <td className="p-3">
-                                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${sessionTypeColor}`}>
-                                                    {sessionType}
-                                                </span>
-                                            </td>
-                                            <td className="p-3">{session.division}</td>
-                                            <td className="p-3">{session.shiftTime}</td>
-                                            <td className="p-3 text-center">{planned}</td>
-                                            <td className="p-3 text-center font-bold text-gray-800">{actual}</td>
-                                            <td className={`p-3 text-center font-bold ${gap >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {gap > 0 ? `+${gap}` : gap}
-                                            </td>
-                                            <td className="p-3 text-center">
-                                                <span className={`px-2 py-1 text-xs rounded-full font-bold ${
-                                                    status === 'FULL FILL' ? 'bg-green-100 text-green-700' :
-                                                    status === 'GAP' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                                                }`}>{status}</span>
-                                            </td>
-                                            <td className="p-3">
-                                                <div className="flex justify-center items-center gap-3">
-                                                    <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700" aria-label="Manage Session"><ViewIcon /></button>
-                                                    <button onClick={() => openDeleteSessionModal(session)} className="text-red-500 hover:text-red-700" aria-label="Delete Session"><DeleteIcon /></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })
-                            ) : (
+                <div className="max-h-[490px] overflow-auto">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm relative">
+                            <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                 <tr>
-                                    <td colSpan={9} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
+                                    <th className="p-3 font-semibold">Date</th>
+                                    <th className="p-3 font-semibold">Tipe</th>
+                                    <th className="p-3 font-semibold">Divisi</th>
+                                    <th className="p-3 font-semibold">Shift</th>
+                                    <th className="p-3 font-semibold text-center">Plan</th>
+                                    <th className="p-3 font-semibold text-center">Actual</th>
+                                    <th className="p-3 font-semibold text-center">Gap</th>
+                                    <th className="p-3 font-semibold text-center">Status</th>
+                                    <th className="p-3 font-semibold text-center">Actions</th>
                                 </tr>
-                            )}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {currentMonthHistory.length > 0 ? (
+                                    currentMonthHistory.map((session) => {
+                                        // LOGIC UPDATE: Actual calculation based on physical presence
+                                        const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
+                                        const planned = session.planMpp;
+                                        const gap = actual - planned;
+                                        
+                                        let status = 'GAP';
+                                        if (actual === planned) status = 'FULL FILL';
+                                        if (actual > planned) status = 'FULL FILL BUFFER';
+                                        
+                                        // Session Type Badge logic
+                                        const sessionType = session.session_type || 'MANUAL';
+                                        const sessionTypeColor = sessionType === 'PUBLIC' 
+                                            ? 'bg-purple-100 text-purple-700' 
+                                            : 'bg-gray-100 text-gray-700';
+
+                                        return (
+                                            <tr key={session.id} className="hover:bg-gray-50">
+                                                <td className="p-3">{session.date}</td>
+                                                <td className="p-3">
+                                                    <span className={`px-2 py-0.5 text-[10px] font-bold rounded uppercase ${sessionTypeColor}`}>
+                                                        {sessionType}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3">{session.division}</td>
+                                                <td className="p-3">{session.shiftTime}</td>
+                                                <td className="p-3 text-center">{planned}</td>
+                                                <td className="p-3 text-center font-bold text-gray-800">{actual}</td>
+                                                <td className={`p-3 text-center font-bold ${gap >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {gap > 0 ? `+${gap}` : gap}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <span className={`px-2 py-1 text-xs rounded-full font-bold ${
+                                                        status === 'FULL FILL' ? 'bg-green-100 text-green-700' :
+                                                        status === 'GAP' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
+                                                    }`}>{status}</span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex justify-center items-center gap-3">
+                                                        <button onClick={() => openManageModal(session)} className="text-blue-500 hover:text-blue-700" aria-label="Manage Session"><ViewIcon /></button>
+                                                        <button onClick={() => openDeleteSessionModal(session)} className="text-red-500 hover:text-red-700" aria-label="Delete Session"><DeleteIcon /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                ) : (
+                                    <tr>
+                                        <td colSpan={9} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
