@@ -1110,7 +1110,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 <button onClick={() => setIsEditingSession(true)} className="absolute top-3 right-3 p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors" title="Edit Session Details">
                                     <EditIcon />
                                 </button>
-                                <div className="flex flex-col sm:flex-row items-start gap-4">
+                                <div className="flex flex-col sm:flex-row items-start gap-4 pr-10">
                                     {/* Left Side: Icon & Main Info */}
                                     <div className="flex items-center gap-4 flex-grow">
                                         <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-2xl font-black shrink-0">
@@ -1147,7 +1147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                         )}
 
-                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-0">
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-[400px]">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
