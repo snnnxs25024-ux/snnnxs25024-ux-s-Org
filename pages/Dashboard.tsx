@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -21,6 +21,7 @@ interface DashboardProps {
     refreshData: () => void;
     setAttendanceHistory: React.Dispatch<React.SetStateAction<AttendanceSession[]>>;
     autoOpenSessionId?: string | null;
+    clearAutoOpenSessionId: () => void;
 }
 
 type PeriodicReportData = {
@@ -187,7 +188,7 @@ const calculateWorkDuration = (checkin: string, checkout: string | null | undefi
     return `${hours}j ${minutes}m`;
 };
 
-const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData, setAttendanceHistory, autoOpenSessionId }) => {
+const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refreshData, setAttendanceHistory, autoOpenSessionId, clearAutoOpenSessionId }) => {
     const [selectedSession, setSelectedSession] = useState<AttendanceSession | null>(null);
     const [isManageModalOpen, setIsManageModalOpen] = useState(false);
     const [isDeleteSessionModalOpen, setIsDeleteSessionModalOpen] = useState(false);
@@ -215,6 +216,15 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [divisionOpts, setDivisionOpts] = useState<string[]>(defaultDivisions);
     const [shiftTimeOpts, setShiftTimeOpts] = useState<string[]>(defaultShiftTimes);
 
+    const openManageModal = useCallback((session: AttendanceSession) => {
+        setSelectedSession(session);
+        setManualAddError(null);
+        setManualAddOpsId('');
+        setIsEditingSession(false);
+        setIsCopyDropdownOpen(false);
+        setIsManageModalOpen(true);
+    }, []);
+
     useEffect(() => {
         const fetchMasterOptions = async () => {
             const { data } = await supabase.from('master_data').select('*');
@@ -237,9 +247,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             const session = attendanceHistory.find(s => s.id === autoOpenSessionId);
             if (session) {
                 openManageModal(session);
+                // Reset the ID after opening the modal to prevent re-opening on data refresh
+                clearAutoOpenSessionId();
             }
         }
-    }, [autoOpenSessionId, attendanceHistory]);
+    }, [autoOpenSessionId, attendanceHistory, openManageModal, clearAutoOpenSessionId]);
 
     useEffect(() => {
         if (selectedSession?.id) {
@@ -425,15 +437,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const formattedDate = new Intl.DateTimeFormat('id-ID', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
     }).format(new Date());
-
-    const openManageModal = (session: AttendanceSession) => {
-        setSelectedSession(session);
-        setManualAddError(null);
-        setManualAddOpsId('');
-        setIsEditingSession(false);
-        setIsCopyDropdownOpen(false);
-        setIsManageModalOpen(true);
-    };
 
     const openDeleteSessionModal = (session: AttendanceSession) => {
         setSelectedSession(session);

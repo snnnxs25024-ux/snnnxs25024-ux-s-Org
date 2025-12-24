@@ -62,7 +62,8 @@ const App: React.FC = () => {
         }
         if (manageId) {
             setAutoOpenSessionId(manageId);
-            window.history.replaceState({}, '', '/');
+            // Hapus parameter dari URL setelah dibaca agar tidak memicu lagi saat refresh
+            window.history.replaceState({}, document.title, window.location.pathname);
         }
     }
   }, []);
@@ -174,6 +175,11 @@ const App: React.FC = () => {
     }
   }, [isPublicMode, session, fetchData]); 
 
+  // Fungsi untuk membersihkan state auto-open setelah digunakan
+  const clearAutoOpenSessionId = () => {
+    setAutoOpenSessionId(null);
+  };
+
   if (isPublicMode) {
       return <PublicAttendance />;
   }
@@ -221,6 +227,7 @@ const App: React.FC = () => {
                   refreshData={fetchData} 
                   setAttendanceHistory={setAttendanceHistory}
                   autoOpenSessionId={autoOpenSessionId}
+                  clearAutoOpenSessionId={clearAutoOpenSessionId}
                />;
       case 'Absensi':
         return <Attendance 
@@ -244,6 +251,7 @@ const App: React.FC = () => {
                   refreshData={fetchData} 
                   setAttendanceHistory={setAttendanceHistory} 
                   autoOpenSessionId={autoOpenSessionId}
+                  clearAutoOpenSessionId={clearAutoOpenSessionId}
                 />;
     }
   };
