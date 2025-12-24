@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AttendanceSession, Worker } from '../types';
 
@@ -12,6 +11,11 @@ const PublicAttendance: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'buffer' | 'error' | 'closed' | 'locked'>('idle');
   const [message, setMessage] = useState('');
   const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
+
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -53,7 +57,10 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as AttendanceSession;
                 if (newSession.status === 'CLOSED') {
-                    setStatus('closed');
+                    // FIX: Prevent race condition. Only set to 'closed' if not already showing a success message.
+                    if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
+                        setStatus('closed');
+                    }
                 }
             }
         )
@@ -62,7 +69,7 @@ const PublicAttendance: React.FC = () => {
     return () => {
         supabase.removeChannel(channel);
     };
-  }, []);
+  }, [sessionId]);
 
   const handleSearch = (text: string) => {
       setOpsId(text);

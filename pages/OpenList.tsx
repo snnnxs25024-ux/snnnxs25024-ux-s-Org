@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabaseClient';
@@ -120,6 +119,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                  setLiveRecords(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
             } else if (payload.eventType === 'DELETE') {
                  setLiveRecords(prev => prev.filter(r => r.id !== payload.old.id));
+            }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${activeSession.id}` },
+        (payload) => {
+            const updatedSession = payload.new as AttendanceSession;
+            if (updatedSession.status === 'CLOSED') {
+                const sessionIdToRedirect = activeSession.id;
+                // No need to set state, component will unmount.
+                window.location.href = `/?page=Dashboard&manageId=${sessionIdToRedirect}`;
             }
         }
       )

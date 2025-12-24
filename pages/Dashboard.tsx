@@ -320,7 +320,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 'Shift ID': session.shiftId,
                 'Ops ID': record.opsId,
                 'Nama Lengkap': record.fullName,
-                'Jam Masuk': new Date(record.timestamp).toLocaleTimeString('id-ID'),
+                'Jam Masuk (Shift)': new Date(record.timestamp).toLocaleTimeString('id-ID'),
+                'Jam Scan (Aktual)': record.scan_timestamp ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID') : '-',
                 'Jam Pulang': record.checkout_timestamp ? new Date(record.checkout_timestamp).toLocaleTimeString('id-ID') : '-',
                 'Total Jam Kerja': calculateWorkDuration(record.timestamp, record.checkout_timestamp),
                 'Status': record.is_takeout ? 'Take Out' : record.manual_status || 'On Plan',
@@ -337,7 +338,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         } else {
             const doc = new jsPDF();
             autoTable(doc, {
-                head: [['Tanggal', 'Divisi', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
+                head: [['Tanggal', 'Divisi', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk (Shift)', 'Jam Scan (Aktual)', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
                 body: reportData.map(Object.values),
             });
             doc.save('Absensi_Report_Bulan_Ini.pdf');
@@ -588,6 +589,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             session_id: selectedSession.id,
             worker_id: worker.id,
             timestamp: new Date(selectedSession.date + 'T' + selectedSession.shiftTime.split(' - ')[0]).toISOString(),
+            scan_timestamp: new Date().toISOString(),
             manual_status: manualAddStatus === 'On Plan' ? null : manualAddStatus,
             is_arrived: false // Manual Add starts as 'Sedang di jalan' usually, let admin check it.
         }).select();
@@ -604,6 +606,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 opsId: worker.opsId,
                 fullName: worker.fullName,
                 timestamp: newDbRecord.timestamp,
+                scan_timestamp: newDbRecord.scan_timestamp,
                 checkout_timestamp: newDbRecord.checkout_timestamp,
                 manual_status: newDbRecord.manual_status,
                 is_takeout: newDbRecord.is_takeout,
@@ -672,6 +675,141 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
     const handlePrintQr = () => {
         window.print();
+    };
+
+    const handleDownloadJpeg = async () => {
+        if (!selectedSession) return;
+    
+        const presentRecords = selectedSession.records.filter(r => r.is_arrived && !r.is_takeout);
+    
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+    
+        // --- Dimensions and Configuration ---
+        const width = 800;
+        const rowHeight = 40; 
+        const headerHeight = 100;
+        const tableHeaderHeight = 40;
+        const footerHeight = 50;
+        const sidePadding = 40;
+        const height = headerHeight + tableHeaderHeight + (presentRecords.length * rowHeight) + footerHeight;
+    
+        canvas.width = width;
+        canvas.height = height;
+    
+        // --- Load Logo for Watermark ---
+        const logo = new Image();
+        logo.crossOrigin = 'anonymous'; // Fix for tainted canvas
+        logo.src = 'https://i.imgur.com/LFPTTQu.png'; // Nexus Logo URL
+        try {
+            await new Promise((resolve, reject) => { 
+                logo.onload = resolve;
+                logo.onerror = reject;
+            });
+        } catch (e) {
+            console.error("Could not load cross-origin image for canvas.", e);
+        }
+    
+        // --- Drawing ---
+        // 1. Background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+    
+        // 2. Watermark
+        if (logo.complete && logo.naturalHeight !== 0) {
+            ctx.globalAlpha = 0.1; // Increased opacity
+            const logoWidth = 400;
+            const logoHeight = logo.height * (logoWidth / logo.width);
+            ctx.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
+            ctx.globalAlpha = 1.0; // Reset opacity
+        }
+    
+        // 3. Main Header
+        ctx.fillStyle = '#1e3a8a'; // Dark Blue
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Laporan Kehadiran', width / 2, 45);
+    
+        // 4. Sub Header
+        ctx.fillStyle = '#4b5563'; // Gray
+        ctx.font = '16px Arial';
+        ctx.fillText(`${selectedSession.division} | ${selectedSession.date} | ${selectedSession.shiftTime}`, width / 2, 70);
+    
+        // 5. Table
+        const tableYStart = headerHeight;
+        const tableWidth = width - (sidePadding * 2);
+        const col1Width = 150;
+        const col3Width = 150;
+        const col2Width = tableWidth - col1Width - col3Width;
+    
+        // Table Header Background
+        ctx.fillStyle = '#3b82f6'; // Blue
+        ctx.fillRect(sidePadding, tableYStart, tableWidth, tableHeaderHeight);
+    
+        // Table Header Text
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText('OPS ID', sidePadding + 20, tableYStart + 25);
+        ctx.fillText('NAMA LENGKAP', sidePadding + col1Width + 20, tableYStart + 25);
+        ctx.textAlign = 'right';
+        ctx.fillText('JAM MASUK', width - sidePadding - 20, tableYStart + 25);
+        
+        // Vertical separators in header
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sidePadding + col1Width, tableYStart);
+        ctx.lineTo(sidePadding + col1Width, tableYStart + tableHeaderHeight);
+        ctx.moveTo(sidePadding + col1Width + col2Width, tableYStart);
+        ctx.lineTo(sidePadding + col1Width + col2Width, tableYStart + tableHeaderHeight);
+        ctx.stroke();
+
+        // Table Body
+        ctx.font = '14px Arial';
+        ctx.strokeStyle = '#e5e7eb'; // Light Gray for borders
+        ctx.lineWidth = 1;
+
+        // Draw bottom line for the header which is the top line for the first row
+        ctx.beginPath();
+        ctx.moveTo(sidePadding, tableYStart + tableHeaderHeight);
+        ctx.lineTo(sidePadding + tableWidth, tableYStart + tableHeaderHeight);
+        ctx.stroke();
+
+        presentRecords.forEach((record, index) => {
+            const y = tableYStart + tableHeaderHeight + (index * rowHeight);
+    
+            // Draw text for the row
+            ctx.fillStyle = '#1f2937'; // Dark Gray Text
+            ctx.textAlign = 'left';
+            ctx.fillText(record.opsId, sidePadding + 20, y + 25);
+            ctx.fillText(record.fullName, sidePadding + col1Width + 20, y + 25);
+            
+            ctx.textAlign = 'right';
+            const scanTime = record.scan_timestamp ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
+            ctx.fillText(scanTime, width - sidePadding - 20, y + 25);
+    
+            // Draw horizontal line at the bottom of the row
+            ctx.beginPath();
+            ctx.moveTo(sidePadding, y + rowHeight);
+            ctx.lineTo(sidePadding + tableWidth, y + rowHeight);
+            ctx.stroke();
+        });
+        
+        // 6. Footer
+        const footerY = height - footerHeight + 30;
+        ctx.fillStyle = '#4b5563';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Total Hadir: ${presentRecords.length} / ${selectedSession.planMpp} Plan`, width / 2, footerY);
+    
+        // --- Trigger Download ---
+        const link = document.createElement('a');
+        const safeDivision = selectedSession.division.replace(/[^a-zA-Z0-9]/g, '_');
+        link.download = `Absensi_${safeDivision}_${selectedSession.date}.jpeg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.click();
     };
 
     const currentMonthReports = useMemo(() => {
@@ -782,6 +920,14 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             alert('Tidak ada data yang hadir (dicentang) untuk disalin.');
         }
     };
+    
+    const sessionSummary = useMemo(() => {
+        if (!selectedSession) return { absen: 0, actual: 0 };
+        return {
+            absen: selectedSession.records.length,
+            actual: selectedSession.records.filter(r => r.is_arrived).length
+        }
+    }, [selectedSession]);
 
     return (
         <div className="space-y-6">
@@ -918,11 +1064,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session">
+            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session" scrollable={false}>
                 {selectedSession && (
-                    <div className="space-y-4">
+                    <div className="flex flex-col h-full overflow-hidden">
                         {isEditingSession ? (
-                            <form onSubmit={handleUpdateSession} className="space-y-4 mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <form onSubmit={handleUpdateSession} className="shrink-0 space-y-4 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
@@ -957,43 +1103,57 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </div>
                             </form>
                         ) : (
-                            <div className="flex justify-between items-start bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-x-8 gap-y-4 w-full">
-                                    <div>
-                                        <p className="text-xs font-bold text-gray-400 uppercase">Tanggal</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.date}</p>
-                                    </div>
-                                    <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Divisi</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.division}</p>
-                                    </div>
-                                     <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.shiftTime}</p>
-                                    </div>
-                                     <div>
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Plan MPP</p>
-                                        <p className="font-semibold text-gray-800">{selectedSession.planMpp}</p>
-                                    </div>
-                                     <div className="col-span-2 md:col-span-4">
-                                         <p className="text-xs font-bold text-gray-400 uppercase">Shift ID</p>
-                                        <p className="text-sm font-mono text-gray-600">{selectedSession.shiftId}</p>
-                                    </div>
-                                </div>
-                                <button onClick={() => setIsEditingSession(true)} className="ml-4 p-2 text-blue-600 hover:bg-blue-100 rounded-full transition-colors" title="Edit Session Details">
+                            <div className="shrink-0 relative bg-white p-5 rounded-xl shadow-md border border-gray-100 mb-4">
+                                <button onClick={() => setIsEditingSession(true)} className="absolute top-3 right-3 p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors" title="Edit Session Details">
                                     <EditIcon />
                                 </button>
+                                <div className="flex flex-col sm:flex-row items-start gap-4">
+                                    {/* Left Side: Icon & Main Info */}
+                                    <div className="flex items-center gap-4 flex-grow">
+                                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-2xl font-black shrink-0">
+                                            {selectedSession.division.substring(0, 2)}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <h3 className="text-xl font-bold text-gray-800">{selectedSession.division}</h3>
+                                            <p className="text-sm text-gray-500 font-medium mt-1">
+                                                {selectedSession.date} <span className="mx-2 text-gray-300">|</span> {selectedSession.shiftTime}
+                                            </p>
+                                            <div className="mt-2 bg-gray-100 px-2 py-1 rounded w-fit">
+                                                <p className="text-xs font-mono text-gray-600 select-all" title="Shift ID">
+                                                    {selectedSession.shiftId}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {/* Right Side: Stat Cards */}
+                                    <div className="w-full sm:w-auto grid grid-cols-3 gap-3 pt-2 sm:pt-0">
+                                        <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Plan</p>
+                                            <p className="text-2xl font-black text-gray-700 mt-1">{selectedSession.planMpp}</p>
+                                        </div>
+                                        <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Absen</p>
+                                            <p className="text-2xl font-black text-gray-700 mt-1">{sessionSummary.absen}</p>
+                                        </div>
+                                        <div className="text-center bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider">Actual</p>
+                                            <p className="text-2xl font-black text-blue-600 mt-1">{sessionSummary.actual}</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        <div className="overflow-x-auto border rounded-lg max-h-[400px]">
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-0">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
                                         <th className="p-2 font-semibold">Kehadiran Fisik</th>
                                         <th className="p-2 font-semibold">OpsID</th>
                                         <th className="p-2 font-semibold">Nama Lengkap</th>
-                                        <th className="p-2 font-semibold">Jam Masuk</th>
+                                        <th className="p-2 font-semibold">Jam Scan</th>
+                                        <th className="p-2 font-semibold">Jam Shift In</th>
+                                        <th className="p-2 font-semibold">Jam Shift Out</th>
                                         <th className="p-2 font-semibold">Total Jam</th>
                                         <th className="p-2 font-semibold">Status Plan</th>
                                         <th className="p-2 font-semibold text-center">Aksi</th>
@@ -1010,7 +1170,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                             effectiveCheckoutTimeStr = new Date(checkinTime + nineHoursInMillis).toISOString();
                                             isAutoCheckout = true;
                                         }
-                                        const isCheckedOut = !!record.checkout_timestamp || isAutoCheckout;
+                                        
+                                        const [shiftInTime, shiftOutTimeDefault] = selectedSession.shiftTime.split(' - ');
+                                        const showShiftOut = isAutoCheckout || record.checkout_timestamp || record.is_takeout;
                                         
                                         // Status Plan Logic
                                         let statusText = 'On Plan';
@@ -1046,7 +1208,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                                 </td>
                                                 <td className="p-2 text-black font-mono font-bold">{record.opsId}</td>
                                                 <td className="p-2 text-gray-800 font-semibold">{record.fullName}</td>
-                                                <td className="p-2">{new Date(record.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</td>
+                                                <td className="p-2 font-mono">{record.scan_timestamp ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</td>
+                                                <td className="p-2">{shiftInTime}</td>
+                                                <td className="p-2">{showShiftOut ? shiftOutTimeDefault : '-'}</td>
                                                 <td className="p-2 font-mono">{calculateWorkDuration(record.timestamp, effectiveCheckoutTimeStr)}</td>
                                                 <td className="p-2"><span className={`px-2 py-1 text-xs rounded-full font-black uppercase ${statusColor}`}>{statusText}</span></td>
                                                 <td className="p-2">
@@ -1055,7 +1219,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                                             <PrintIcon />
                                                         </button>
                                                         <button onClick={() => handleAction('takeout', record.id)} disabled={loadingAction || record.is_takeout} className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">TakeOut</button>
-                                                        <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || isCheckedOut || record.is_takeout} className="text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">CheckOut</button>
+                                                        <button onClick={() => handleAction('checkout', record.id)} disabled={loadingAction || !!effectiveCheckoutTimeStr || record.is_takeout} className="text-xs bg-green-500 hover:bg-green-600 text-white font-bold py-1 px-2 rounded disabled:opacity-50 disabled:cursor-not-allowed">CheckOut</button>
                                                         <button onClick={() => openDeleteRecordModal(record)} disabled={loadingAction} className="text-red-500 hover:text-red-700 disabled:opacity-50 p-1" aria-label={`Remove ${record.fullName}`}><DeleteIcon /></button>
                                                     </div>
                                                 </td>
@@ -1065,7 +1229,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </tbody>
                             </table>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="shrink-0 mt-4 pt-4 border-t border-gray-200">
                             <form onSubmit={handleManualAdd} className="space-y-3">
                                <h4 className="text-md font-semibold text-gray-700">Tambah Karyawan Manual</h4>
                                {manualAddError && <p className="text-red-600 bg-red-50 p-2 rounded-lg text-sm">{manualAddError}</p>}
@@ -1083,56 +1247,64 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                <p className="text-xs text-gray-500">Note: Karyawan yang ditambah manual akan berstatus "Sedang di jalan" (OTW). Centang kehadiran fisik jika sudah sampai.</p>
                            </form>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                            <div className="relative" ref={dropdownRef}>
-                                <button 
-                                    onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
-                                    className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                        <div className="shrink-0 mt-4 pt-4 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleDownloadJpeg}
+                                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
                                 >
-                                    <CopyIcon /> Salin Data
-                                    <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    <DownloadIcon /> Download JPEG
                                 </button>
-                                {isCopyDropdownOpen && (
-                                    <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
-                                        <button 
-                                            onClick={handleCopyOpsIdsOnly}
-                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
-                                                copyFeedback === 'ops'
-                                                ? 'bg-green-500 text-white font-bold'
-                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                            }`}
-                                        >
-                                            {copyFeedback === 'ops' ? (
-                                                <div className="flex items-center gap-2">
-                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                     Tersalin!
-                                                </div>
-                                            ) : (
-                                                "Salin OpsID Saja"
-                                            )}
-                                        </button>
-                                        <button 
-                                            onClick={handleCopyExcelFormat}
-                                            className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
-                                                copyFeedback === 'excel'
-                                                ? 'bg-green-500 text-white font-bold'
-                                                : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                            }`}
-                                        >
-                                            {copyFeedback === 'excel' ? (
-                                                <div className="flex items-center gap-2">
-                                                     <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                     Tersalin!
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    Salin Format Excel
-                                                    <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-                                )}
+                                <div className="relative" ref={dropdownRef}>
+                                    <button 
+                                        onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
+                                        className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                                    >
+                                        <CopyIcon /> Salin Data
+                                        <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    {isCopyDropdownOpen && (
+                                        <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
+                                            <button 
+                                                onClick={handleCopyOpsIdsOnly}
+                                                className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
+                                                    copyFeedback === 'ops'
+                                                    ? 'bg-green-500 text-white font-bold'
+                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                }`}
+                                            >
+                                                {copyFeedback === 'ops' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        Tersalin!
+                                                    </div>
+                                                ) : (
+                                                    "Salin OpsID Saja"
+                                                )}
+                                            </button>
+                                            <button 
+                                                onClick={handleCopyExcelFormat}
+                                                className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
+                                                    copyFeedback === 'excel'
+                                                    ? 'bg-green-500 text-white font-bold'
+                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                }`}
+                                            >
+                                                {copyFeedback === 'excel' ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                        Tersalin!
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        Salin Format Excel
+                                                        <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                             <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                                 {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
