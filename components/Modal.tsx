@@ -33,7 +33,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrolla
             </svg>
           </button>
         </div>
-        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 overflow-y-auto flex flex-col'}`}>
+        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 flex flex-col overflow-hidden'}`}>
             {children}
         </div>
       </div>

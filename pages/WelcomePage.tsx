@@ -1,7 +1,7 @@
 
 import React from 'react';
 
-const LOGO_URL = 'https://i.imgur.com/LFPTTQu.png';
+const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
 
 interface WelcomePageProps {
   onEnter: () => void;
@@ -25,20 +25,20 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onEnter }) => {
         <div className="relative mb-12 group cursor-pointer" onClick={onEnter}>
           <div className="absolute inset-0 bg-blue-200 rounded-full blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-500 scale-125"></div>
           <div className="relative w-40 h-40 md:w-56 md:h-56 bg-white rounded-[3rem] shadow-2xl shadow-blue-100 flex items-center justify-center p-8 border border-white transition-transform duration-500 group-hover:scale-105 group-hover:-rotate-2 ring-1 ring-gray-50">
-             <img src={LOGO_URL} alt="Nexus Logo" className="w-full h-full object-contain" />
+             <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
           </div>
         </div>
 
         {/* Text Content */}
         <div className="space-y-4 animate-fade-in-up">
            <div className="inline-block px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black tracking-[0.2em] uppercase border border-blue-100">
-              Sunter DC Portal
+              Portal Absensi
            </div>
            <h1 className="text-4xl md:text-6xl font-black text-slate-800 tracking-tighter leading-tight">
-             NEXUS <span className="text-blue-600">ABSENSI</span>
+             <span className="text-blue-600">ABSENIN</span>
            </h1>
            <p className="text-slate-400 text-sm md:text-base font-medium max-w-md mx-auto leading-relaxed">
-             Sistem manajemen kehadiran terintegrasi untuk efisiensi operasional gudang Sunter DC.
+             Sistem manajemen kehadiran terintegrasi untuk efisiensi operasional.
            </p>
         </div>
 
@@ -56,7 +56,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onEnter }) => {
       </div>
 
       <div className="absolute bottom-8 text-center">
-        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by Nexus Core</p>
+        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ABSENIN Core</p>
       </div>
 
       <style>{`

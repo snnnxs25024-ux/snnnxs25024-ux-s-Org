@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AttendanceSession, Worker } from '../types';
@@ -23,7 +24,7 @@ const PublicAttendance: React.FC = () => {
     const id = parts[parts.length - 1];
     setSessionId(id);
 
-    const lockKey = `nexus_attended_${id}`;
+    const lockKey = `absenin_attended_${id}`;
     if (localStorage.getItem(lockKey)) {
         setStatus('locked');
         return;
@@ -167,7 +168,7 @@ const PublicAttendance: React.FC = () => {
           }
 
           if (sessionId) {
-              localStorage.setItem(`nexus_attended_${sessionId}`, 'true');
+              localStorage.setItem(`absenin_attended_${sessionId}`, 'true');
           }
           
           setSubmittedData({
@@ -242,8 +243,8 @@ const PublicAttendance: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-visible relative border border-gray-100"> 
           <div className="bg-blue-600 p-8 text-white text-center rounded-t-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-16 -mt-16"></div>
-              <h1 className="text-2xl font-black tracking-[0.2em] uppercase">ABSENSI NEXUS</h1>
-              <p className="opacity-80 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Sunter DC Portal</p>
+              <h1 className="text-2xl font-black tracking-[0.2em] uppercase">ABSENIN</h1>
+              <p className="opacity-80 text-[10px] font-black uppercase tracking-[0.4em] mt-2">Portal Absensi</p>
           </div>
           <div className="p-8">
               <div className="mb-8 text-center border-b border-gray-100 pb-6">
@@ -286,7 +287,7 @@ const PublicAttendance: React.FC = () => {
                   <button 
                     type="submit" 
                     disabled={status === 'loading'}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-100 transition-all active:scale-95 flex items-center justify-center gap-3"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-100 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                       {status === 'loading' ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

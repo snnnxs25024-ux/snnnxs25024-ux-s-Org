@@ -189,9 +189,9 @@ const App: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-[#050a18]">
           <div className="flex flex-col items-center">
              <div className="animate-pulse mb-6">
-                 <img src="https://i.imgur.com/LFPTTQu.png" alt="Nexus Logo" className="h-20 w-20 object-contain" />
+                 <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-20 w-20 object-contain" />
              </div>
-             <div className="text-blue-500 text-[10px] font-black tracking-[0.5em] uppercase">Initializing Nexus Core</div>
+             <div className="text-blue-500 text-[10px] font-black tracking-[0.5em] uppercase">Initializing ABSENIN</div>
           </div>
         </div>
       );
@@ -211,7 +211,7 @@ const App: React.FC = () => {
         <div className="flex justify-center items-center h-full">
           <div className="flex flex-col items-center">
              <div className="animate-bounce mb-4">
-                 <img src="https://i.imgur.com/LFPTTQu.png" alt="Nexus Logo" className="h-12 w-12 object-contain opacity-50" />
+                 <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-12 w-12 object-contain opacity-50" />
              </div>
              <div className="text-gray-400 text-xs font-bold uppercase tracking-widest">Memuat Data...</div>
           </div>
@@ -267,10 +267,10 @@ const App: React.FC = () => {
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
         <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
            <div className="flex items-center gap-3">
-              <img src="https://i.imgur.com/LFPTTQu.png" alt="Nexus Logo" className="h-8 w-8 object-contain" />
+              <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-8 w-8 object-contain" />
               <div>
-                <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENSI NEXUS</h1>
-                <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Sunter DC Portal</p>
+                <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENIN</h1>
+                <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Attendance Portal</p>
               </div>
            </div>
           <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">

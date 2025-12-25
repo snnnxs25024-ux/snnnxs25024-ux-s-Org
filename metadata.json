@@ -1,6 +1,6 @@
 {
-  "name": "ABSENSI NEXUS SUNTER DC",
-  "description": "Sistem Manajemen Absensi Terpadu Nexus Sunter DC - Efisien, Real-time, dan Futuristik.",
+  "name": "ABSENIN",
+  "description": "Sistem Manajemen Absensi Terpadu. Efisien, Real-time, dan Futuristik.",
   "requestFramePermissions": [
     "camera"
   ]

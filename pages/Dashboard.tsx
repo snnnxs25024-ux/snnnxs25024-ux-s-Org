@@ -704,7 +704,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         // --- Load Logo for Watermark ---
         const logo = new Image();
         logo.crossOrigin = 'anonymous'; // Fix for tainted canvas
-        logo.src = 'https://i.imgur.com/LFPTTQu.png'; // Nexus Logo URL
+        logo.src = 'https://i.imgur.com/lie9EMX.png';
         try {
             await new Promise((resolve, reject) => { 
                 logo.onload = resolve;
@@ -721,7 +721,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
         // 2. Watermark
         if (logo.complete && logo.naturalHeight !== 0) {
-            ctx.globalAlpha = 0.1; // Increased opacity
+            ctx.globalAlpha = 0.2; // Increased opacity
             const logoWidth = 400;
             const logoHeight = logo.height * (logoWidth / logo.width);
             ctx.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
@@ -1071,85 +1071,87 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
             <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session" scrollable={false}>
                 {selectedSession && (
-                    <div className="flex flex-col h-full">
-                        {isEditingSession ? (
-                            <form onSubmit={handleUpdateSession} className="shrink-0 space-y-4 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
-                                        <input name="date" type="date" defaultValue={selectedSession.date} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-gray-500 uppercase">Divisi</label>
-                                        <select name="division" defaultValue={selectedSession.division} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            {divisionOpts.map(d => <option key={d} value={d}>{d}</option>)}
-                                        </select>
-                                    </div>
-                                    <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift Jam</label>
-                                         <select name="shiftTime" defaultValue={selectedSession.shiftTime} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                             {shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}
-                                         </select>
-                                    </div>
-                                    <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Shift ID</label>
-                                         <select name="shiftId" defaultValue={selectedSession.shiftId} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                            {shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
-                                         </select>
-                                    </div>
-                                     <div>
-                                         <label className="block text-xs font-semibold text-gray-500 uppercase">Plan MPP</label>
-                                         <input name="planMpp" type="number" defaultValue={selectedSession.planMpp} min="1" required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                    </div>
-                                </div>
-                                <div className="flex justify-end gap-2 mt-4">
-                                    <button type="button" onClick={() => setIsEditingSession(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
-                                    <button type="submit" disabled={loadingAction} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save Changes</button>
-                                </div>
-                            </form>
-                        ) : (
-                            <div className="shrink-0 relative bg-white p-5 rounded-xl shadow-md border border-gray-100 mb-4">
-                                <button onClick={() => setIsEditingSession(true)} className="absolute top-3 right-3 p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors" title="Edit Session Details">
-                                    <EditIcon />
-                                </button>
-                                <div className="flex flex-col sm:flex-row items-start gap-4">
-                                    {/* Left Side: Icon & Main Info */}
-                                    <div className="flex items-center gap-4 flex-grow">
-                                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-2xl font-black shrink-0">
-                                            {selectedSession.division.substring(0, 2)}
+                    <div className="flex flex-col h-full overflow-hidden">
+                        {/* --- STATIC TOP SECTION --- */}
+                        <div className="shrink-0">
+                            {isEditingSession ? (
+                                <form onSubmit={handleUpdateSession} className="space-y-4 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase">Tanggal</label>
+                                            <input name="date" type="date" defaultValue={selectedSession.date} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                         </div>
-                                        <div className="flex flex-col">
-                                            <h3 className="text-xl font-bold text-gray-800">{selectedSession.division}</h3>
-                                            <p className="text-sm text-gray-500 font-medium mt-1">
-                                                {selectedSession.date} <span className="mx-2 text-gray-300">|</span> {selectedSession.shiftTime}
-                                            </p>
-                                            <div className="mt-2 bg-gray-100 px-2 py-1 rounded w-fit">
-                                                <p className="text-xs font-mono text-gray-600 select-all" title="Shift ID">
-                                                    {selectedSession.shiftId}
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase">Divisi</label>
+                                            <select name="division" defaultValue={selectedSession.division} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                {divisionOpts.map(d => <option key={d} value={d}>{d}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase">Shift Jam</label>
+                                            <select name="shiftTime" defaultValue={selectedSession.shiftTime} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                {shiftTimeOpts.map(time => (<option key={time} value={time}>{time}</option>))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase">Shift ID</label>
+                                            <select name="shiftId" defaultValue={selectedSession.shiftId} required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                {shiftIdOpts.map(shift => (<option key={shift} value={shift}>{shift}</option>))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-500 uppercase">Plan MPP</label>
+                                            <input name="planMpp" type="number" defaultValue={selectedSession.planMpp} min="1" required className="w-full bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end gap-2 mt-4">
+                                        <button type="button" onClick={() => setIsEditingSession(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors">Cancel</button>
+                                        <button type="submit" disabled={loadingAction} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">Save Changes</button>
+                                    </div>
+                                </form>
+                            ) : (
+                                <div className="relative bg-white p-5 rounded-xl shadow-md border border-gray-100 mb-4">
+                                    <button onClick={() => setIsEditingSession(true)} className="absolute top-3 right-3 p-2 text-gray-400 hover:bg-blue-50 hover:text-blue-600 rounded-full transition-colors" title="Edit Session Details">
+                                        <EditIcon />
+                                    </button>
+                                    <div className="flex flex-col sm:flex-row items-start gap-4">
+                                        <div className="flex items-center gap-4 flex-grow">
+                                            <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center text-2xl font-black shrink-0">
+                                                {selectedSession.division.substring(0, 2)}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <h3 className="text-xl font-bold text-gray-800">{selectedSession.division}</h3>
+                                                <p className="text-sm text-gray-500 font-medium mt-1">
+                                                    {selectedSession.date} <span className="mx-2 text-gray-300">|</span> {selectedSession.shiftTime}
                                                 </p>
+                                                <div className="mt-2 bg-gray-100 px-2 py-1 rounded w-fit">
+                                                    <p className="text-xs font-mono text-gray-600 select-all" title="Shift ID">
+                                                        {selectedSession.shiftId}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="w-full sm:w-auto grid grid-cols-3 gap-3 pt-2 sm:pt-0">
+                                            <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Plan</p>
+                                                <p className="text-2xl font-black text-gray-700 mt-1">{selectedSession.planMpp}</p>
+                                            </div>
+                                            <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Absen</p>
+                                                <p className="text-2xl font-black text-gray-700 mt-1">{sessionSummary.absen}</p>
+                                            </div>
+                                            <div className="text-center bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                                <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider">Actual</p>
+                                                <p className="text-2xl font-black text-blue-600 mt-1">{sessionSummary.actual}</p>
                                             </div>
                                         </div>
                                     </div>
-                                    {/* Right Side: Stat Cards */}
-                                    <div className="w-full sm:w-auto grid grid-cols-3 gap-3 pt-2 sm:pt-0">
-                                        <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Plan</p>
-                                            <p className="text-2xl font-black text-gray-700 mt-1">{selectedSession.planMpp}</p>
-                                        </div>
-                                        <div className="text-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                            <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Absen</p>
-                                            <p className="text-2xl font-black text-gray-700 mt-1">{sessionSummary.absen}</p>
-                                        </div>
-                                        <div className="text-center bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                            <p className="text-[10px] font-black text-blue-500 uppercase tracking-wider">Actual</p>
-                                            <p className="text-2xl font-black text-blue-600 mt-1">{sessionSummary.actual}</p>
-                                        </div>
-                                    </div>
                                 </div>
-                            </div>
-                        )}
-
-                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-[300px]">
+                            )}
+                        </div>
+                        
+                        {/* --- SCROLLABLE MIDDLE SECTION --- */}
+                        <div className="flex-1 min-h-0 overflow-y-auto border rounded-lg">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
@@ -1234,6 +1236,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* --- STATIC BOTTOM SECTION --- */}
                         <div className="shrink-0 mt-4 pt-4 border-t border-gray-200">
                             <form onSubmit={handleManualAdd} className="space-y-3">
                                <h4 className="text-md font-semibold text-gray-700">Tambah Karyawan Manual</h4>
@@ -1251,69 +1255,70 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                </div>
                                <p className="text-xs text-gray-500">Note: Karyawan yang ditambah manual akan berstatus "Sedang di jalan" (OTW). Centang kehadiran fisik jika sudah sampai.</p>
                            </form>
-                        </div>
-                        <div className="shrink-0 mt-4 pt-4 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3">
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleDownloadJpeg}
-                                    className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
-                                >
-                                    <DownloadIcon /> Download JPEG
-                                </button>
-                                <div className="relative" ref={dropdownRef}>
-                                    <button 
-                                        onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
-                                        className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+
+                            <div className="mt-4 pt-4 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3">
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={handleDownloadJpeg}
+                                        className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
                                     >
-                                        <CopyIcon /> Salin Data
-                                        <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        <DownloadIcon /> Download JPEG
                                     </button>
-                                    {isCopyDropdownOpen && (
-                                        <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
-                                            <button 
-                                                onClick={handleCopyOpsIdsOnly}
-                                                className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
-                                                    copyFeedback === 'ops'
-                                                    ? 'bg-green-500 text-white font-bold'
-                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                                }`}
-                                            >
-                                                {copyFeedback === 'ops' ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                        Tersalin!
-                                                    </div>
-                                                ) : (
-                                                    "Salin OpsID Saja"
-                                                )}
-                                            </button>
-                                            <button 
-                                                onClick={handleCopyExcelFormat}
-                                                className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
-                                                    copyFeedback === 'excel'
-                                                    ? 'bg-green-500 text-white font-bold'
-                                                    : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-                                                }`}
-                                            >
-                                                {copyFeedback === 'excel' ? (
-                                                    <div className="flex items-center gap-2">
-                                                        <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                                        Tersalin!
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        Salin Format Excel
-                                                        <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    )}
+                                    <div className="relative" ref={dropdownRef}>
+                                        <button 
+                                            onClick={() => setIsCopyDropdownOpen(!isCopyDropdownOpen)} 
+                                            className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                                        >
+                                            <CopyIcon /> Salin Data
+                                            <svg className={`w-4 h-4 ml-1 transition-transform ${isCopyDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                        </button>
+                                        {isCopyDropdownOpen && (
+                                            <div className="absolute bottom-full mb-2 left-0 w-56 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-10 animate-fade-in-up overflow-hidden">
+                                                <button 
+                                                    onClick={handleCopyOpsIdsOnly}
+                                                    className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 border-b border-gray-100 ${
+                                                        copyFeedback === 'ops'
+                                                        ? 'bg-green-500 text-white font-bold'
+                                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                    }`}
+                                                >
+                                                    {copyFeedback === 'ops' ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                            Tersalin!
+                                                        </div>
+                                                    ) : (
+                                                        "Salin OpsID Saja"
+                                                    )}
+                                                </button>
+                                                <button 
+                                                    onClick={handleCopyExcelFormat}
+                                                    className={`w-full text-left px-4 py-3 text-sm transition-all duration-300 ${
+                                                        copyFeedback === 'excel'
+                                                        ? 'bg-green-500 text-white font-bold'
+                                                        : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                                                    }`}
+                                                >
+                                                    {copyFeedback === 'excel' ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                                            Tersalin!
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            Salin Format Excel
+                                                            <span className="block text-xs mt-0.5 text-gray-400">Format 4 Kolom (Tab)</span>
+                                                        </>
+                                                    )}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
+                                <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
+                                </button>
                             </div>
-                            <button onClick={handleCheckOutAll} disabled={loadingAction || !selectedSession.records.some(r => !r.checkout_timestamp && !r.is_takeout && (new Date().getTime() - new Date(r.timestamp).getTime()) < (9 * 60 * 60 * 1000))} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                                {loadingAction ? 'Processing...' : 'Check Out All Remaining'}
-                            </button>
                         </div>
                     </div>
                 )}
@@ -1403,7 +1408,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 {qrWorkerData && (
                     <div className="flex flex-col items-center justify-center p-4">
                         <div id="printable-qr" className="flex flex-col items-center text-center">
-                            <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
+                            <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENIN</h1>
                             <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
                                 {qrCodeUrl ? (
                                     <img src={qrCodeUrl} alt={`QR Code for ${qrWorkerData.opsId}`} className="w-64 h-auto max-w-full object-contain print:w-48 print:h-48" />

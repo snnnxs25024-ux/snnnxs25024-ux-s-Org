@@ -1,4 +1,5 @@
-const CACHE_NAME = 'nexus-absensi-v1';
+
+const CACHE_NAME = 'absenin-v1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

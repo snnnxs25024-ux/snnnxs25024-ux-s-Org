@@ -15,7 +15,7 @@ interface SidebarProps {
   onClose: () => void;
 }
 
-const LOGO_URL = 'https://i.imgur.com/LFPTTQu.png';
+const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
 
 const NavItem: React.FC<{
   label: Page;
@@ -98,13 +98,13 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
         <div className="relative">
           <div className={`bg-blue-600 text-white p-5 transition-all duration-300 flex items-center ${isCollapsed ? 'justify-center' : 'gap-4'}`}>
             <div className={`shrink-0 bg-white p-1.5 rounded-xl shadow-inner transition-all duration-300 ${isCollapsed ? 'w-10 h-10' : 'w-12 h-12'}`}>
-              <img src={LOGO_URL} alt="Nexus Logo" className="w-full h-full object-contain" />
+              <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
             </div>
             
             {!isCollapsed && (
               <div className="animate-fade-in overflow-hidden">
-                <h1 className="text-lg font-bold tracking-tight whitespace-nowrap uppercase">NEXUS SUNTER</h1>
-                <p className="text-[10px] opacity-80 font-medium tracking-widest uppercase">Attendance Core</p>
+                <h1 className="text-lg font-bold tracking-tight whitespace-nowrap uppercase">ABSENIN</h1>
+                <p className="text-[10px] opacity-80 font-medium tracking-widest uppercase">Sistem Absensi</p>
               </div>
             )}
           </div>
@@ -158,11 +158,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
             <div className="flex items-center justify-between bg-gray-50 p-2 rounded-xl border border-gray-100">
                <div className="flex items-center gap-3 overflow-hidden">
                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center p-1 overflow-hidden shrink-0">
-                   <img src={LOGO_URL} alt="Avatar" className="w-full h-full object-contain" />
+                   <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
                  </div>
                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-gray-700 truncate">Nexus DC Admin</p>
-                    <p className="text-[9px] text-gray-400 truncate tracking-tight">Administrator Account</p>
+                    <p className="text-xs font-bold text-gray-700 truncate">Admin</p>
+                    <p className="text-[9px] text-gray-400 truncate tracking-tight">Akun Administrator</p>
                  </div>
                </div>
                <button 

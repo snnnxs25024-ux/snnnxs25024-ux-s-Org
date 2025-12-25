@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 // Menggunakan logo yang diberikan oleh user
-const LOGO_URL = 'https://i.imgur.com/LFPTTQu.png';
+const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
 // Menggunakan gambar gudang logistik modern dengan perspektif luas
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2000&auto=format&fit=crop'; 
 
@@ -17,7 +17,7 @@ const LoginPage: React.FC = () => {
 
   // Load email jika "Ingat Saya" pernah dicentang sebelumnya
   useEffect(() => {
-    const savedEmail = localStorage.getItem('nexus_remember_email');
+    const savedEmail = localStorage.getItem('absenin_remember_email');
     if (savedEmail) {
       setEmail(savedEmail);
       setRememberMe(true);
@@ -40,9 +40,9 @@ const LoginPage: React.FC = () => {
     } else {
       // Jika login berhasil dan "Ingat Saya" dicentang, simpan email
       if (rememberMe) {
-        localStorage.setItem('nexus_remember_email', email);
+        localStorage.setItem('absenin_remember_email', email);
       } else {
-        localStorage.removeItem('nexus_remember_email');
+        localStorage.removeItem('absenin_remember_email');
       }
     }
   };
@@ -77,7 +77,7 @@ const LoginPage: React.FC = () => {
             Efisien. Terintegrasi. <br/><span className="text-blue-500">Real-time.</span>
           </h2>
           <p className="text-blue-100/40 text-lg font-medium max-w-lg mt-8 leading-relaxed">
-            Sistem manajemen absensi tercanggih bernama <span className="text-blue-400 font-bold">"ABSENINS"</span>, yang berguna untuk pantau kehadiran Daily Worker di ekosistem pergudangan Sunter DC.
+            Sistem manajemen absensi tercanggih bernama <span className="text-blue-400 font-bold">"ABSENIN"</span>, yang berguna untuk pantau kehadiran Daily Worker di ekosistem pergudangan.
           </p>
 
           <div className="mt-12 flex gap-10">
@@ -98,8 +98,8 @@ const LoginPage: React.FC = () => {
             <img src={LOGO_URL} alt="Mini Logo" className="w-full h-full object-contain" />
           </div>
           <div className="flex flex-col">
-            <span className="text-white text-[11px] font-black tracking-[0.2em] uppercase leading-none">NEXUS SUNTER DC</span>
-            <span className="text-blue-500/60 text-[9px] font-bold uppercase tracking-widest mt-1.5">Industrial Attendance Portal</span>
+            <span className="text-white text-[11px] font-black tracking-[0.2em] uppercase leading-none">ABSENIN</span>
+            <span className="text-blue-500/60 text-[9px] font-bold uppercase tracking-widest mt-1.5">Portal Absensi Industri</span>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@ const LoginPage: React.FC = () => {
               <div className="relative">
                 <div className="absolute inset-0 bg-blue-100 rounded-3xl blur-xl opacity-50 scale-150"></div>
                 <div className="relative w-20 h-20 p-3 bg-white rounded-3xl border border-blue-100 shadow-2xl transition-transform hover:scale-110 cursor-pointer flex items-center justify-center">
-                  <img src={LOGO_URL} alt="Nexus Logo" className="w-full h-full object-contain" />
+                  <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
                 </div>
               </div>
             </div>
@@ -132,7 +132,7 @@ const LoginPage: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-sm font-semibold" 
-                  placeholder="admin@nexus.com"
+                  placeholder="admin@example.com"
                   required
                 />
               </div>
@@ -166,7 +166,7 @@ const LoginPage: React.FC = () => {
                     </svg>
                   ) : (
                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573 3.007-9.963-7.178z" />
                         <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   )}
@@ -218,7 +218,7 @@ const LoginPage: React.FC = () => {
 
           <div className="mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest">
-              &copy; 2025 ABSENINS
+              &copy; 2025 ABSENIN
             </p>
             <div className="flex gap-6">
               <a href="#" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">Bantuan</a>

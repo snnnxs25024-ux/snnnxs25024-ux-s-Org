@@ -186,8 +186,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   
   const handleDownloadTemplate = () => {
     const headers = ['opsId', 'fullName', 'nik', 'phone', 'contractType', 'department', 'status'];
-    const sampleData = [{ opsId: 'NEX999', fullName: 'John Doe', nik: '3201010101010001', phone: '081298765432',
-      contractType: 'Daily Worker Vendor - NEXUS', department: 'SOC Operator', status: 'Active'
+    const sampleData = [{ opsId: 'OPS999', fullName: 'John Doe', nik: '3201010101010001', phone: '081298765432',
+      contractType: 'Daily Worker Vendor', department: 'SOC Operator', status: 'Active'
     }];
     const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
     const workbook = XLSX.utils.book_new();
@@ -242,7 +242,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 
             workersToInsert.push({
                 opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
-                contractType: 'Daily Worker Vendor - NEXUS', department: matchedDept, status: row.status,
+                contractType: 'Daily Worker Vendor', department: matchedDept, status: row.status,
                 createdAt: new Date().toISOString(),
             });
         }
@@ -417,7 +417,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       <Modal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} title={selectedWorker ? "Edit Worker" : "Add New Worker"}>
         <form onSubmit={handleSaveWorker} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <InputField label="OpsID" name="opsId" defaultValue={selectedWorker?.opsId} required placeholder="e.g. NEX001" />
+                <InputField label="OpsID" name="opsId" defaultValue={selectedWorker?.opsId} required placeholder="e.g. OPS001" />
                 <InputField label="Full Name" name="fullName" defaultValue={selectedWorker?.fullName} required placeholder="e.g. John Doe" />
                 <InputField label="NIK KTP" name="nik" defaultValue={selectedWorker?.nik} required type="number" placeholder="16 digits" />
                 <InputField label="Phone Number" name="phone" defaultValue={selectedWorker?.phone} required type="tel" placeholder="e.g. 0812..." />
@@ -425,8 +425,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                 <SelectField 
                     label="Contract Type" 
                     name="contractType" 
-                    defaultValue={selectedWorker?.contractType || "Daily Worker Vendor - NEXUS"} 
-                    options={["Daily Worker Vendor - NEXUS"]} 
+                    defaultValue={selectedWorker?.contractType || "Daily Worker Vendor"} 
+                    options={["Daily Worker Vendor"]} 
                     required 
                 />
                 
@@ -538,7 +538,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         {selectedWorker && (
             <div className="flex flex-col items-center justify-center p-4">
                 <div id="printable-qr" className="flex flex-col items-center text-center">
-                    <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENSI NEXUS</h1>
+                    <h1 className="text-xl font-bold mb-2 hidden print:block text-black">ABSENIN</h1>
                     <div className="bg-white p-2 rounded-lg border border-gray-200 print:border-0 flex flex-col items-center">
                         {qrCodeUrl ? (
                             <img src={qrCodeUrl} alt={`QR Code for ${selectedWorker.opsId}`} className="w-64 h-auto max-w-full object-contain print:w-48 print:h-48" />
