@@ -1071,7 +1071,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
             <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session" scrollable={false}>
                 {selectedSession && (
-                    <div className="flex flex-col h-full overflow-hidden">
+                    <div className="flex flex-col h-full">
                         {isEditingSession ? (
                             <form onSubmit={handleUpdateSession} className="shrink-0 space-y-4 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1149,7 +1149,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                         )}
 
-                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-0">
+                        <div className="flex-1 overflow-y-auto border rounded-lg min-h-[300px]">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>

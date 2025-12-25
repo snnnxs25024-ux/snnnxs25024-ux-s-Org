@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface ModalProps {
@@ -32,7 +33,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrolla
             </svg>
           </button>
         </div>
-        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 overflow-hidden flex flex-col min-h-0'}`}>
+        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 overflow-y-auto flex flex-col'}`}>
             {children}
         </div>
       </div>
