@@ -7,16 +7,19 @@ import Database from './pages/Database';
 import OpenList from './pages/OpenList';
 import PublicAttendance from './pages/PublicAttendance';
 import Settings from './pages/Settings';
-import LoginPage from './pages/LoginPage';
+import AuthPage from './pages/AuthPage';
 import WelcomePage from './pages/WelcomePage';
-import { Worker, AttendanceSession, AttendanceRecord } from './types';
+import { Worker, AttendanceSession, AttendanceRecord, Profile } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
+import { Session } from '@supabase/supabase-js';
+
 
 export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
 
 const App: React.FC = () => {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
@@ -27,25 +30,52 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPublicMode, setIsPublicMode] = useState(false);
   
-  const workersRef = useRef<Worker[]>([]);
-  useEffect(() => {
-    workersRef.current = workers;
-  }, [workers]);
-  
   const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
+    const fetchSessionAndProfile = async () => {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        setSession(session);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+        if (session?.user) {
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+            
+            if (profileData) {
+                setProfile(profileData);
+            } else if (profileError) {
+                console.error("Error fetching profile:", profileError);
+                // Handle case where user exists in auth but not in profiles (e.g., sign up interruption)
+                await supabase.auth.signOut();
+                setSession(null);
+                setProfile(null);
+            }
+        }
+        setAuthLoading(false);
+    };
+
+    fetchSessionAndProfile();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        setSession(session);
+        if (session?.user) {
+            const { data: profileData } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+            setProfile(profileData);
+        } else {
+            setProfile(null);
+        }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+}, []);
+
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -62,55 +92,39 @@ const App: React.FC = () => {
         }
         if (manageId) {
             setAutoOpenSessionId(manageId);
-            // Hapus parameter dari URL setelah dibaca agar tidak memicu lagi saat refresh
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     }
   }, []);
 
-  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'id'> | null>(null);
-  const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
-
   const fetchData = useCallback(async () => {
-    if (!session) return;
-    if (workers.length === 0) setLoading(true); 
+    if (!session || !profile) return;
+    setLoading(true); 
     setError(null);
+    const companyId = profile.company_id;
 
     try {
-        const fetchAll = async (table: string, select: string) => {
-            let allData: any[] = [];
-            let lastData: any[] | null = null;
-            let page = 0;
-            const pageSize = 1000;
+        const { data: workersData, error: workersError } = await supabase
+            .from('workers')
+            .select('*')
+            .eq('company_id', companyId);
+        if (workersError) throw workersError;
 
-            do {
-                const { data, error } = await supabase
-                    .from(table)
-                    .select(select)
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
-
-                if (error) throw error;
-
-                if (data) {
-                    allData = [...allData, ...data];
-                    lastData = data;
-                } else {
-                    lastData = [];
-                }
-                page++;
-            } while (lastData && lastData.length === pageSize);
-            
-            return allData;
-        };
-
-        const workersData = await fetchAll('workers', '*');
-        const sessionsData = await fetchAll('attendance_sessions', '*');
-        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp, is_arrived');
+        const { data: sessionsData, error: sessionsError } = await supabase
+            .from('attendance_sessions')
+            .select('*')
+            .eq('company_id', companyId);
+        if (sessionsError) throw sessionsError;
         
-        const typedWorkers: Worker[] = workersData.map(w => ({
-            ...w,
-            createdAt: w.createdAt || new Date().toISOString()
-        }));
+        const sessionIds = sessionsData.map(s => s.id);
+        
+        const { data: recordsData, error: recordsError } = await supabase
+            .from('attendance_records')
+            .select('*')
+            .in('session_id', sessionIds);
+        if (recordsError) throw recordsError;
+
+        const typedWorkers: Worker[] = workersData || [];
         setWorkers(typedWorkers);
 
         const workerMap = new Map<string, Worker>();
@@ -121,24 +135,17 @@ const App: React.FC = () => {
         });
 
         const recordsBySessionId = new Map<string, any[]>();
-        recordsData.forEach(record => {
+        (recordsData || []).forEach(record => {
             if (!recordsBySessionId.has(record.session_id)) {
                 recordsBySessionId.set(record.session_id, []);
             }
             recordsBySessionId.get(record.session_id)!.push(record);
         });
 
-        const history: AttendanceSession[] = sessionsData.map(session => {
+        const history: AttendanceSession[] = (sessionsData || []).map(session => {
             const recordsForSession = recordsBySessionId.get(session.id) || [];
             return {
-                id: session.id,
-                date: session.date,
-                division: session.division,
-                shiftTime: session.shiftTime,
-                shiftId: session.shiftId,
-                planMpp: session.planMpp,
-                status: session.status,
-                session_type: session.session_type,
+                ...session,
                 records: recordsForSession.map((rec: any) => {
                     const worker = workerMap.get(rec.worker_id);
                     return {
@@ -165,17 +172,16 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [session, workers.length]); 
+  }, [session, profile]); 
 
   useEffect(() => {
-    if (!isPublicMode && session) {
+    if (!isPublicMode && session && profile) {
         fetchData();
-    } else {
+    } else if (!session || !profile) {
         setLoading(false); 
     }
-  }, [isPublicMode, session, fetchData]); 
+  }, [isPublicMode, session, profile, fetchData]); 
 
-  // Fungsi untuk membersihkan state auto-open setelah digunakan
   const clearAutoOpenSessionId = () => {
     setAutoOpenSessionId(null);
   };
@@ -201,8 +207,8 @@ const App: React.FC = () => {
     return <WelcomePage onEnter={() => setShowWelcome(false)} />;
   }
 
-  if (!session) {
-    return <LoginPage />;
+  if (!session || !profile) {
+    return <AuthPage />;
   }
 
   const renderPage = () => {
@@ -233,17 +239,14 @@ const App: React.FC = () => {
         return <Attendance 
                   workers={workers} 
                   refreshData={fetchData}
-                  activeSession={activeSession}
-                  setActiveSession={setActiveSession}
-                  activeRecords={activeRecords}
-                  setActiveRecords={setActiveRecords}
+                  profile={profile}
                />;
       case 'Open List':
-          return <OpenList workers={workers} />;
+          return <OpenList workers={workers} profile={profile} />;
       case 'Data Base':
-        return <Database workers={workers} refreshData={fetchData} />;
+        return <Database workers={workers} refreshData={fetchData} profile={profile} />;
       case 'Pengaturan':
-          return <Settings />;
+          return <Settings profile={profile} />;
       default:
         return <Dashboard 
                   workers={workers} 
@@ -263,6 +266,7 @@ const App: React.FC = () => {
         setCurrentPage={setCurrentPage} 
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
+        profile={profile}
       />
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
         <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">

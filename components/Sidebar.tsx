@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Page } from '../App';
 import { supabase } from '../lib/supabaseClient';
+import { Profile } from '../types';
 import DashboardIcon from './icons/DashboardIcon';
 import AttendanceIcon from './icons/AttendanceIcon';
 import DatabaseIcon from './icons/DatabaseIcon';
@@ -13,6 +14,7 @@ interface SidebarProps {
   setCurrentPage: (page: Page) => void;
   isOpen: boolean; 
   onClose: () => void;
+  profile: Profile | null;
 }
 
 const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
@@ -50,7 +52,7 @@ const NavItem: React.FC<{
   </li>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, onClose, profile }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleLogout = async () => {
@@ -161,7 +163,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
                    <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
                  </div>
                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-gray-700 truncate">Admin</p>
+                    <p className="text-xs font-bold text-gray-700 truncate">{profile?.full_name || 'Admin'}</p>
                     <p className="text-[9px] text-gray-400 truncate tracking-tight">Akun Administrator</p>
                  </div>
                </div>

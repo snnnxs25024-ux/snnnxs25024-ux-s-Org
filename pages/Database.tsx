@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
-import { Worker } from '../types';
+import { Worker, Profile } from '../types';
 import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
 import EditIcon from '../components/icons/EditIcon';
@@ -18,6 +18,7 @@ import SearchIcon from '../components/icons/SearchIcon';
 interface DatabaseProps {
   workers: Worker[];
   refreshData: () => void;
+  profile: Profile;
 }
 
 // Helper Components
@@ -52,7 +53,7 @@ const SelectField = ({ label, name, defaultValue, options, required = false }: a
   </div>
 );
 
-const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
+const Database: React.FC<DatabaseProps> = ({ workers, refreshData, profile }) => {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -72,15 +73,16 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   // Fetch Divisions for Dropdown & Validation
   useEffect(() => {
     const fetchDivisions = async () => {
-        const { data } = await supabase.from('master_data').select('value').eq('category', 'DIVISION').order('value', { ascending: true });
+        const { data } = await supabase.from('master_data').select('value').eq('category', 'DIVISION').eq('company_id', profile.company_id).order('value', { ascending: true });
         if (data && data.length > 0) {
             setDivisionOpts(data.map(d => d.value));
         } else {
+            // Provide a default list if none are set for the company yet
             setDivisionOpts(['SOC Operator', 'Cache', 'Return', 'Inventory']);
         }
     };
     fetchDivisions();
-  }, []);
+  }, [profile.company_id]);
 
   const filteredWorkers = useMemo(() => {
     return workers
@@ -138,6 +140,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         contractType: formData.get('contractType') as Worker['contractType'],
         department: formData.get('department') as string,
         status: formData.get('status') as Worker['status'],
+        company_id: profile.company_id,
     };
     
     let error;
@@ -174,11 +177,11 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
 
   const handleDeleteAllWorkers = async () => {
     setLoadingAction(true);
-    const { error } = await supabase.from('workers').delete().not('id', 'is', null);
+    const { error } = await supabase.from('workers').delete().eq('company_id', profile.company_id);
     setLoadingAction(false);
     if (error) alert(`Error deleting all workers: ${error.message}`);
     else {
-      alert('All worker data has been successfully deleted.');
+      alert('All worker data for your company has been successfully deleted.');
       setIsDeleteAllConfirmOpen(false);
       refreshData();
     }
@@ -196,7 +199,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   };
   
   const handleExport = () => {
-    const dataToExport = workers.map(({ id, createdAt, ...rest }) => rest);
+    const dataToExport = workers.map(({ id, createdAt, company_id, ...rest }) => rest);
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Workers');
@@ -241,6 +244,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             const matchedDept = departmentValues.find(d => d.toLowerCase() === row.department?.toLowerCase()) || row.department;
 
             workersToInsert.push({
+                company_id: profile.company_id,
                 opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
                 contractType: 'Daily Worker Vendor', department: matchedDept, status: row.status,
                 createdAt: new Date().toISOString(),

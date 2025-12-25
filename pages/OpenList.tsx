@@ -1,12 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabaseClient';
-import { AttendanceSession, AttendanceRecord, Worker } from '../types';
+import { AttendanceSession, AttendanceRecord, Worker, Profile } from '../types';
 import CopyIcon from '../components/icons/CopyIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
 
 interface OpenListProps {
   workers: Worker[];
+  profile: Profile;
 }
 
 // Fallbacks
@@ -25,7 +27,7 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
     return `${startTime} - ${endTime}`;
 });
 
-const OpenList: React.FC<OpenListProps> = ({ workers }) => {
+const OpenList: React.FC<OpenListProps> = ({ workers, profile }) => {
   const [activeSession, setActiveSession] = useState<AttendanceSession | null>(null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,7 +42,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   useEffect(() => {
     const fetchMasterOptions = async () => {
-        const { data } = await supabase.from('master_data').select('*');
+        const { data } = await supabase.from('master_data').select('*').eq('company_id', profile.company_id);
         if (data && data.length > 0) {
             const divs = data.filter(d => d.category === 'DIVISION').map(d => d.value);
             const times = data.filter(d => d.category === 'SHIFT_TIME').map(d => d.value);
@@ -52,7 +54,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         }
     };
     fetchMasterOptions();
-  }, []);
+  }, [profile.company_id]);
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
@@ -65,6 +67,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
               .eq('status', 'OPEN')
               .eq('date', today)
               .eq('session_type', 'PUBLIC')
+              .eq('company_id', profile.company_id)
               .order('id', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -74,7 +77,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           }
       };
       restoreSession();
-  }, []);
+  }, [profile.company_id]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -151,6 +154,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     
     const sessionData = {
       id: newSessionId,
+      company_id: profile.company_id,
       date: formData.get('sessionDate') as string,
       division: formData.get('division') as string,
       shiftTime: formData.get('shiftTime') as string,

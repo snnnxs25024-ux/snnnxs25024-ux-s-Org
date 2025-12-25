@@ -2,13 +2,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient';
-import { MasterData } from '../types';
+import { MasterData, Profile } from '../types';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import AddIcon from '../components/icons/AddIcon';
 import UploadIcon from '../components/icons/UploadIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 
-const Settings: React.FC = () => {
+interface SettingsProps {
+    profile: Profile;
+}
+
+const Settings: React.FC<SettingsProps> = ({ profile }) => {
     const [divisions, setDivisions] = useState<MasterData[]>([]);
     const [shiftTimes, setShiftTimes] = useState<MasterData[]>([]);
     const [shiftIds, setShiftIds] = useState<MasterData[]>([]);
@@ -18,13 +22,13 @@ const Settings: React.FC = () => {
     const [actionLoading, setActionLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        fetchMasterData();
-    }, []);
-
     const fetchMasterData = async () => {
         setLoading(true);
-        const { data, error } = await supabase.from('master_data').select('*').order('value', { ascending: true });
+        const { data, error } = await supabase
+            .from('master_data')
+            .select('*')
+            .eq('company_id', profile.company_id)
+            .order('value', { ascending: true });
         if (data) {
             setDivisions(data.filter(d => d.category === 'DIVISION'));
             setShiftTimes(data.filter(d => d.category === 'SHIFT_TIME'));
@@ -36,6 +40,11 @@ const Settings: React.FC = () => {
         setLoading(false);
     };
 
+    useEffect(() => {
+        fetchMasterData();
+    }, [profile.company_id]);
+
+
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newItemValue.trim()) return;
@@ -43,7 +52,8 @@ const Settings: React.FC = () => {
         setActionLoading(true);
         const { data, error } = await supabase.from('master_data').insert({
             category: activeTab,
-            value: newItemValue.trim()
+            value: newItemValue.trim(),
+            company_id: profile.company_id
         }).select().single();
 
         if (error) {
@@ -64,7 +74,7 @@ const Settings: React.FC = () => {
         if (error) {
             alert("Gagal menghapus: " + error.message);
         } else {
-            updateLocalState({ id, category: activeTab, value: '' }, 'delete');
+            updateLocalState({ id, category: activeTab, value: '', company_id: profile.company_id }, 'delete');
         }
         setActionLoading(false);
     };
@@ -134,7 +144,8 @@ const Settings: React.FC = () => {
                     .filter(val => val !== '' && !existingValues.has(val.toLowerCase()))
                     .map(val => ({
                         category: activeTab,
-                        value: val
+                        value: val,
+                        company_id: profile.company_id,
                     }));
 
                 // Remove duplicates within the import file itself

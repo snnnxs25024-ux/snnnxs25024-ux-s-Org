@@ -1,6 +1,22 @@
 
+export interface Company {
+  id: string; // UUID
+  name: string;
+  created_at: string;
+}
+
+export interface Profile {
+  id: string; // a.k.a user_id, matches auth.users.id
+  company_id: string;
+  full_name: string;
+  nik: string;
+  phone: string;
+  role: 'admin' | 'member';
+}
+
 export interface Worker {
   id?: string;
+  company_id: string;
   opsId: string;
   fullName: string;
   nik: string;
@@ -26,6 +42,7 @@ export interface AttendanceRecord {
 
 export interface AttendanceSession {
   id: string; // Unique identifier for the session
+  company_id: string;
   date: string; // YYYY-MM-DD
   division: string;
   shiftTime: string;
@@ -39,6 +56,7 @@ export interface AttendanceSession {
 
 export interface MasterData {
     id: number;
+    company_id: string; // Master data is also company-specific
     category: 'DIVISION' | 'SHIFT_TIME' | 'SHIFT_ID';
     value: string;
 }
