@@ -2,14 +2,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import Modal from '../components/Modal';
-import { Worker, AttendanceSession, AttendanceRecord, Profile } from '../types';
+import { Worker, AttendanceSession, AttendanceRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import DeleteIcon from '../components/icons/DeleteIcon';
 
 interface AttendanceProps {
   workers: Worker[];
   refreshData: () => void;
-  profile: Profile;
+  activeSession: Omit<AttendanceSession, 'records' | 'id'> | null;
+  setActiveSession: React.Dispatch<React.SetStateAction<Omit<AttendanceSession, 'records' | 'id'> | null>>;
+  activeRecords: Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[];
+  setActiveRecords: React.Dispatch<React.SetStateAction<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>>;
 }
 
 const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['department'][] } = {
@@ -39,14 +42,9 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
     return `${startTime} - ${endTime}`;
 });
 
-type ActiveSession = Omit<AttendanceSession, 'records' | 'id' | 'company_id'>;
-type ActiveRecord = Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>;
-
 const Attendance: React.FC<AttendanceProps> = ({ 
-  workers, refreshData, profile
+  workers, refreshData, activeSession, setActiveSession, activeRecords, setActiveRecords,
 }) => {
-  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [activeRecords, setActiveRecords] = useState<ActiveRecord[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(!activeSession);
   const [opsIdInput, setOpsIdInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +59,7 @@ const Attendance: React.FC<AttendanceProps> = ({
 
   useEffect(() => {
     const fetchMasterOptions = async () => {
-        const { data } = await supabase.from('master_data').select('*').eq('company_id', profile.company_id);
+        const { data } = await supabase.from('master_data').select('*');
         if (data && data.length > 0) {
             const divs = data.filter(d => d.category === 'DIVISION').map(d => d.value);
             const times = data.filter(d => d.category === 'SHIFT_TIME').map(d => d.value);
@@ -73,7 +71,7 @@ const Attendance: React.FC<AttendanceProps> = ({
         }
     };
     fetchMasterOptions();
-  }, [profile.company_id]);
+  }, []);
   
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
@@ -140,10 +138,9 @@ const Attendance: React.FC<AttendanceProps> = ({
       try {
           const { data, error } = await supabase
             .from('attendance_records')
-            .select('id, session:attendance_sessions!inner(date, company_id)')
+            .select('id, attendance_sessions!inner(date)')
             .eq('worker_id', worker.id)
-            .eq('session.date', activeSession.date)
-            .eq('session.company_id', profile.company_id);
+            .eq('attendance_sessions.date', activeSession.date);
           
           if (error) {
              console.error(error);
@@ -167,7 +164,7 @@ const Attendance: React.FC<AttendanceProps> = ({
       const officialTimestamp = new Date(sessionDateIso).toISOString();
       const actualScanTimestamp = new Date().toISOString();
 
-      const newRecord: ActiveRecord = {
+      const newRecord: Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'> = {
           workerId: worker.id,
           opsId: worker.opsId,
           fullName: worker.fullName,
@@ -189,7 +186,6 @@ const Attendance: React.FC<AttendanceProps> = ({
             const newSessionId = uuidv4();
             const { error: sessionError } = await supabase.from('attendance_sessions').insert({
                 id: newSessionId, 
-                company_id: profile.company_id,
                 date: activeSession.date, 
                 division: activeSession.division,
                 shiftTime: activeSession.shiftTime, 

@@ -1,16 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import GoogleIcon from '../components/icons/GoogleIcon';
 
+// Menggunakan logo yang diberikan oleh user
 const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
+// Menggunakan gambar gudang logistik modern dengan perspektif luas
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2000&auto=format&fit=crop'; 
 
-interface LoginPageProps {
-  onSwitchMode: () => void;
-}
-
-const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
+const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,6 +15,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load email jika "Ingat Saya" pernah dicentang sebelumnya
   useEffect(() => {
     const savedEmail = localStorage.getItem('absenin_remember_email');
     if (savedEmail) {
@@ -40,6 +38,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
       setError(error.message === 'Invalid login credentials' ? 'Email atau Password salah.' : error.message);
       setLoading(false);
     } else {
+      // Jika login berhasil dan "Ingat Saya" dicentang, simpan email
       if (rememberMe) {
         localStorage.setItem('absenin_remember_email', email);
       } else {
@@ -47,18 +46,14 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
       }
     }
   };
-  
-  const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-    });
-  };
 
   return (
     <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
       
+      {/* LEFT: Hero Warehouse Section */}
       <div className="hidden lg:flex lg:w-3/5 relative bg-[#020617] flex-col items-center justify-center p-16">
         <div className="absolute inset-0 overflow-hidden">
+          {/* Ambient Glows */}
           <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-blue-600/20 rounded-full blur-[120px]"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px]"></div>
           
@@ -68,6 +63,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
               alt="Modern Warehouse Logistics" 
               className="w-full h-full object-cover opacity-40 mix-blend-luminosity scale-105 animate-slow-zoom"
             />
+            {/* Cyber Grid Overlay */}
             <div className="absolute inset-0 opacity-[0.15] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#3b82f6 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }}></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#020617] via-[#020617]/50 to-transparent"></div>
           </div>
@@ -108,6 +104,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
         </div>
       </div>
 
+      {/* RIGHT: Login Form Section */}
       <div className="w-full lg:w-2/5 flex items-center justify-center p-8 sm:p-20 bg-white relative">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center lg:text-left">
@@ -120,23 +117,12 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
               </div>
             </div>
             <h1 className="text-4xl font-black text-gray-900 tracking-tighter">Selamat Datang</h1>
-            <p className="text-gray-500 font-medium mt-3 text-lg leading-relaxed">Silakan masuk menggunakan akun perusahaan Anda.</p>
-          </div>
-          
-           <button onClick={signInWithGoogle} className="w-full flex items-center justify-center gap-3 py-4 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 transition-colors mb-6">
-              <GoogleIcon />
-              <span className="text-sm font-bold text-gray-700">Masuk dengan Google</span>
-          </button>
-          
-          <div className="flex items-center my-6">
-              <hr className="flex-grow border-gray-200"/>
-              <span className="mx-4 text-[10px] uppercase font-black text-gray-400 tracking-widest">Atau</span>
-              <hr className="flex-grow border-gray-200"/>
+            <p className="text-gray-500 font-medium mt-3 text-lg leading-relaxed">Silakan masuk menggunakan kredensial administrator Anda.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Alamat Email</label>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Email Administrator</label>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
@@ -146,7 +132,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-sm font-semibold" 
-                  placeholder="admin@perusahaan.com"
+                  placeholder="admin@example.com"
                   required
                 />
               </div>
@@ -226,18 +212,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onSwitchMode }) => {
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                   <span>Autentikasi...</span>
                 </div>
-              ) : 'Masuk Ke Akun'}
+              ) : 'Masuk Ke Dashboard'}
             </button>
           </form>
-
-          <div className="mt-8 text-center">
-            <p className="text-gray-500 text-sm font-medium">
-              Belum punya akun?{' '}
-              <button onClick={onSwitchMode} className="font-bold text-blue-600 hover:underline">
-                Daftar sekarang
-              </button>
-            </p>
-          </div>
 
           <div className="mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest">
