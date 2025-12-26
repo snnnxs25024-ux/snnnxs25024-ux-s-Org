@@ -87,12 +87,22 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           .order('timestamp', { ascending: false });
 
         if (data) {
-           const enrichedData = data.map((rec: any) => {
+// FIX: Explicitly map database record to AttendanceRecord type to avoid type mismatch.
+// The database uses snake_case (e.g., worker_id) and may have null values,
+// while the TypeScript type expects camelCase (e.g., workerId) and non-nullable booleans.
+           const enrichedData: AttendanceRecord[] = data.map((rec: any) => {
                const worker = workers.find(w => w.id === rec.worker_id);
                return {
-                   ...rec,
+                   id: rec.id,
+                   workerId: rec.worker_id,
                    opsId: worker?.opsId || 'N/A',
-                   fullName: worker?.fullName || 'Unknown'
+                   fullName: worker?.fullName || 'Unknown',
+                   timestamp: rec.timestamp,
+                   scan_timestamp: rec.scan_timestamp,
+                   checkout_timestamp: rec.checkout_timestamp,
+                   manual_status: rec.manual_status,
+                   is_takeout: rec.is_takeout ?? false,
+                   is_arrived: rec.is_arrived,
                };
            });
            setLiveRecords(enrichedData);
@@ -106,19 +116,44 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         { event: '*', schema: 'public', table: 'attendance_records', filter: `session_id=eq.${activeSession.id}` },
         async (payload) => {
             if (payload.eventType === 'INSERT') {
-                 const newRecord = payload.new;
+                 const newRecord = payload.new as any;
                  const worker = workers.find(w => w.id === newRecord.worker_id);
-                 const enriched = {
-                   ...newRecord,
+                 const enriched: AttendanceRecord = {
+                   id: newRecord.id,
+                   workerId: newRecord.worker_id,
                    opsId: worker?.opsId || 'N/A',
-                   fullName: worker?.fullName || 'Unknown'
+                   fullName: worker?.fullName || 'Unknown',
+                   timestamp: newRecord.timestamp,
+                   scan_timestamp: newRecord.scan_timestamp,
+                   checkout_timestamp: newRecord.checkout_timestamp,
+                   manual_status: newRecord.manual_status,
+                   is_takeout: newRecord.is_takeout ?? false,
+                   is_arrived: newRecord.is_arrived
                  };
                  setLiveRecords(prev => [enriched, ...prev]);
             } else if (payload.eventType === 'UPDATE') {
-                const updated = payload.new;
-                 setLiveRecords(prev => prev.map(r => r.id === updated.id ? { ...r, ...updated } : r));
+                const updated = payload.new as any;
+                 setLiveRecords(prev => prev.map(r => {
+                    if (r.id === updated.id) {
+                        const worker = workers.find(w => w.id === updated.worker_id);
+                        return {
+                            ...r,
+                            id: updated.id,
+                            workerId: updated.worker_id,
+                            opsId: worker?.opsId || r.opsId,
+                            fullName: worker?.fullName || r.fullName,
+                            timestamp: updated.timestamp,
+                            scan_timestamp: updated.scan_timestamp,
+                            checkout_timestamp: updated.checkout_timestamp,
+                            manual_status: updated.manual_status,
+                            is_takeout: updated.is_takeout ?? false,
+                            is_arrived: updated.is_arrived,
+                        };
+                    }
+                    return r;
+                 }));
             } else if (payload.eventType === 'DELETE') {
-                 setLiveRecords(prev => prev.filter(r => r.id !== payload.old.id));
+                 setLiveRecords(prev => prev.filter(r => r.id !== (payload.old as any).id));
             }
         }
       )
