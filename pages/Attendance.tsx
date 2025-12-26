@@ -5,6 +5,7 @@ import Modal from '../components/Modal';
 import { Worker, AttendanceSession, AttendanceRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import DeleteIcon from '../components/icons/DeleteIcon';
+import { useToast } from '../hooks/useToast';
 
 interface AttendanceProps {
   workers: Worker[];
@@ -51,6 +52,7 @@ const Attendance: React.FC<AttendanceProps> = ({
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { showToast } = useToast();
   
   // Dynamic Options
   const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
@@ -101,6 +103,7 @@ const Attendance: React.FC<AttendanceProps> = ({
       setActiveSession({ date, division, shiftTime, shiftId, planMpp });
       setActiveRecords([]);
       setError(null);
+      showToast('Sesi manual baru telah dimulai.', { type: 'success', title: 'Sesi Dimulai' });
     }
   };
   
@@ -207,11 +210,13 @@ const Attendance: React.FC<AttendanceProps> = ({
             const { error: recordsError } = await supabase.from('attendance_records').insert(recordsToInsert);
             if (recordsError) throw recordsError;
         }
+        showToast(`Sesi manual untuk ${activeSession.division} berhasil disimpan.`, { type: 'success', title: 'Sesi Disimpan' });
         setActiveSession(null);
         setActiveRecords([]);
         setIsModalOpen(true);
         refreshData();
     } catch(err: any) {
+        showToast(`Gagal menyimpan sesi: ${err.message}`, { type: 'error', title: 'Error' });
         setError(`Failed to save session: ${err.message}`);
     } finally {
         setIsEndingSession(false);
@@ -227,6 +232,7 @@ const Attendance: React.FC<AttendanceProps> = ({
     setActiveRecords([]);
     setIsCancelConfirmOpen(false);
     setIsModalOpen(true);
+    showToast('Sesi manual dibatalkan dan data tidak disimpan.', { type: 'info', title: 'Sesi Dibatalkan' });
   };
 
   const handleRemoveActiveRecord = (workerIdToRemove: string) => {
@@ -416,7 +422,7 @@ const Attendance: React.FC<AttendanceProps> = ({
         </form>
       </Modal>
 
-      <Modal isOpen={isCancelConfirmOpen} onClose={() => setIsCancelConfirmOpen(false)} title="Confirm Cancel Session">
+      <Modal isOpen={isCancelConfirmOpen} onClose={() => setIsCancelConfirmOpen(false)} title="Confirm Cancel Session" size="sm" scrollable={false}>
         <div>
             <p className="text-gray-600">Are you sure you want to cancel this session? All scanned data will be lost and will not be saved.</p>
             <div className="flex justify-end gap-4 mt-6">

@@ -13,6 +13,7 @@ import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
 import EditIcon from '../components/icons/EditIcon';
 import PrintIcon from '../components/icons/PrintIcon';
+import { useToast } from '../hooks/useToast';
 
 
 interface DashboardProps {
@@ -208,6 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isQrModalOpen, setIsQrModalOpen] = useState(false);
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [qrWorkerData, setQrWorkerData] = useState<{ fullName: string; opsId: string; department: string } | null>(null);
+    const { showToast } = useToast();
     
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -453,10 +455,12 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setLoadingAction(true);
         const { error } = await supabase.from('attendance_sessions').delete().match({ id: selectedSession.id });
         setLoadingAction(false);
-        if (error) alert(`Error deleting session: ${error.message}`);
-        else {
+        if (error) {
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Hapus Sesi' });
+        } else {
             setIsDeleteSessionModalOpen(false);
             setSelectedSession(null);
+            showToast('Sesi absensi berhasil dihapus.', { type: 'success', title: 'Berhasil' });
             refreshData();
         }
     };
@@ -467,8 +471,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const { error } = await supabase.from('attendance_records').delete().eq('id', recordToDelete.id);
         setLoadingAction(false);
         if (error) {
-            alert(`Error removing record: ${error.message}`);
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Hapus Data' });
         } else {
+            showToast(`Data absensi untuk ${recordToDelete.fullName} telah dihapus.`, { type: 'success', title: 'Berhasil' });
             setAttendanceHistory(prevHistory =>
                 prevHistory.map(session =>
                     session.id === selectedSession.id
@@ -494,7 +499,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
         setLoadingAction(false);
         if (error) {
-            alert(`Error updating record: ${error.message}`);
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Update' });
         } else if (updatedRecord && selectedSession) {
              const updatedFields = {
                 checkout_timestamp: updatedRecord.checkout_timestamp,
@@ -530,7 +535,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             .eq('id', recordId);
 
         if (error) {
-            alert('Gagal update status: ' + error.message);
+            showToast('Gagal update status: ' + error.message, { type: 'error', title: 'Error' });
             refreshData(); // Revert on error
         }
     };
@@ -541,15 +546,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const nineHoursInMillis = 9 * 60 * 60 * 1000;
         const recordsToCheckOut = selectedSession.records.filter(r => !r.checkout_timestamp && !r.is_takeout && (now - new Date(r.timestamp).getTime()) < nineHoursInMillis);
         if (recordsToCheckOut.length === 0) {
-            alert("All remaining workers have been auto-checked out or already checked out manually.");
+            showToast("Semua karyawan yang tersisa sudah checkout.", { type: 'info', title: 'Informasi' });
             return;
         }
         const recordIdsToCheckOut = recordsToCheckOut.map(r => r.id);
         setLoadingAction(true);
         const { error } = await supabase.from('attendance_records').update({ checkout_timestamp: new Date().toISOString() }).in('id', recordIdsToCheckOut).is('checkout_timestamp', null);
         setLoadingAction(false);
-        if (error) alert(`Error checking out all: ${error.message}`);
-        else {
+        if (error) {
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Checkout' });
+        } else {
+            showToast(`${recordIdsToCheckOut.length} karyawan berhasil di-checkout.`, { type: 'success', title: 'Berhasil' });
             refreshData();
             setIsManageModalOpen(false);
         }
@@ -623,6 +630,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         : session
                 )
             );
+            showToast(`${worker.fullName} berhasil ditambahkan.`, { type: 'success', title: 'Karyawan Ditambahkan' });
             setManualAddOpsId('');
         }
     };
@@ -648,7 +656,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setLoadingAction(false);
 
         if (error) {
-            alert(`Error updating session: ${error.message}`);
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Update Sesi' });
         } else {
             // Update local state
             setAttendanceHistory(prev => prev.map(s => 
@@ -656,6 +664,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             ));
             // Update selected session to reflect changes immediately in the view
             setSelectedSession(prev => prev ? { ...prev, ...updates } : null);
+            showToast('Detail sesi berhasil diperbarui.', { type: 'success', title: 'Berhasil' });
             setIsEditingSession(false);
         }
     };
@@ -887,16 +896,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
       if (opsIdsToCopy) {
           navigator.clipboard.writeText(opsIdsToCopy).then(() => {
               setCopyFeedback('ops');
+              showToast('OpsID berhasil disalin ke clipboard.', { type: 'success', title: 'Tersalin!' });
               setTimeout(() => {
                   setCopyFeedback(null);
                   setIsCopyDropdownOpen(false);
               }, 1500);
           }, (err) => {
-              alert('Gagal menyalin OpsIDs.');
+              showToast('Gagal menyalin OpsID.', { type: 'error', title: 'Error' });
               console.error('Copy failed', err);
           });
       } else {
-          alert('Tidak ada OpsID yang hadir (dicentang) untuk disalin.');
+          showToast('Tidak ada OpsID yang hadir (dicentang) untuk disalin.', { type: 'info', title: 'Info' });
       }
     };
 
@@ -911,16 +921,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy).then(() => {
                 setCopyFeedback('excel');
+                showToast('Data format Excel berhasil disalin.', { type: 'success', title: 'Tersalin!' });
                 setTimeout(() => {
                     setCopyFeedback(null);
                     setIsCopyDropdownOpen(false);
                 }, 1500);
             }, (err) => {
-                alert('Gagal menyalin data.');
+                showToast('Gagal menyalin data.', { type: 'error', title: 'Error' });
                 console.error('Copy failed', err);
             });
         } else {
-            alert('Tidak ada data yang hadir (dicentang) untuk disalin.');
+            showToast('Tidak ada data yang hadir (dicentang) untuk disalin.', { type: 'info', title: 'Info' });
         }
     };
     
@@ -1324,7 +1335,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
 
-            <Modal isOpen={isDeleteSessionModalOpen} onClose={() => setIsDeleteSessionModalOpen(false)} title="Confirm Session Deletion">
+            <Modal isOpen={isDeleteSessionModalOpen} onClose={() => setIsDeleteSessionModalOpen(false)} title="Confirm Session Deletion" size="md" scrollable={false}>
                 {selectedSession && (
                     <div>
                         <p className="text-gray-600">Are you sure you want to delete the attendance session for <strong className="text-blue-600">{selectedSession.date} ({selectedSession.shiftTime})</strong>?</p>
@@ -1339,7 +1350,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
 
-            <Modal isOpen={isDeleteRecordModalOpen} onClose={() => setIsDeleteRecordModalOpen(false)} title="Confirm Record Deletion">
+            <Modal isOpen={isDeleteRecordModalOpen} onClose={() => setIsDeleteRecordModalOpen(false)} title="Confirm Record Deletion" size="md" scrollable={false}>
                 {recordToDelete && (
                     <div>
                         <p className="text-gray-600">Are you sure you want to delete the attendance record for <strong className="text-blue-600">{recordToDelete.fullName}</strong>?</p>
@@ -1404,7 +1415,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
 
-            <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
+            <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code" size="md">
                 {qrWorkerData && (
                     <div className="flex flex-col items-center justify-center p-4">
                         <div id="printable-qr" className="flex flex-col items-center text-center">

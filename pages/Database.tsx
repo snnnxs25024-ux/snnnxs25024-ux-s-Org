@@ -14,6 +14,7 @@ import PrintIcon from '../components/icons/PrintIcon';
 import { supabase } from '../lib/supabaseClient';
 import CopyIcon from '../components/icons/CopyIcon';
 import SearchIcon from '../components/icons/SearchIcon';
+import { useToast } from '../hooks/useToast';
 
 interface DatabaseProps {
   workers: Worker[];
@@ -68,6 +69,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [divisionOpts, setDivisionOpts] = useState<string[]>([]);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   const importFileRef = useRef<HTMLInputElement>(null);
+  const { showToast } = useToast();
 
   // Fetch Divisions for Dropdown & Validation
   useEffect(() => {
@@ -150,10 +152,12 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     }
     
     setLoadingAction(false);
-    if (error) alert(`Error saving worker: ${error.message}`);
-    else {
+    if (error) {
+        showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menyimpan' });
+    } else {
       setIsEditModalOpen(false);
       setSelectedWorker(null);
+      showToast('Data karyawan berhasil disimpan.', { type: 'success', title: 'Berhasil' });
       refreshData();
     }
   };
@@ -163,10 +167,12 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         setLoadingAction(true);
         const { error } = await supabase.from('workers').delete().eq('id', workerToDelete.id);
         setLoadingAction(false);
-        if (error) alert(`Error deleting worker: ${error.message}`);
-        else {
+        if (error) {
+            showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menghapus' });
+        } else {
             setIsDeleteConfirmOpen(false);
             setWorkerToDelete(null);
+            showToast(`${workerToDelete.fullName} berhasil dihapus.`, { type: 'success', title: 'Berhasil Dihapus' });
             refreshData();
         }
     }
@@ -176,9 +182,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     setLoadingAction(true);
     const { error } = await supabase.from('workers').delete().not('id', 'is', null);
     setLoadingAction(false);
-    if (error) alert(`Error deleting all workers: ${error.message}`);
-    else {
-      alert('All worker data has been successfully deleted.');
+    if (error) {
+        showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Reset' });
+    } else {
+      showToast('Semua data karyawan berhasil dihapus.', { type: 'success', title: 'Database Direset' });
       setIsDeleteAllConfirmOpen(false);
       refreshData();
     }
@@ -270,9 +277,17 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             success: successfulInserts,
             failed: [...failedImports, ...dbSaveFailed]
         });
+        
+        if (successfulInserts.length > 0) {
+            showToast(`${successfulInserts.length} data berhasil diimpor.`, { type: 'success', title: 'Impor Berhasil' });
+            refreshData();
+        }
+        if (failedImports.length > 0 || dbSaveFailed.length > 0) {
+            showToast(`${failedImports.length + dbSaveFailed.length} data gagal diimpor. Cek summary.`, { type: 'error', title: 'Impor Gagal Sebagian' });
+        }
+        
         setLoadingAction(false);
         setIsImportSummaryOpen(true);
-        if (successfulInserts.length > 0) refreshData();
         if (importFileRef.current) importFileRef.current.value = '';
     };
     reader.readAsBinaryString(file);
@@ -455,7 +470,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         </form>
       </Modal>
 
-      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion">
+      <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Confirm Deletion" size="sm">
         {workerToDelete && (
             <div>
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
@@ -472,7 +487,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         )}
       </Modal>
 
-      <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="DANGER ZONE: Reset Database">
+      <Modal isOpen={isDeleteAllConfirmOpen} onClose={() => setIsDeleteAllConfirmOpen(false)} title="DANGER ZONE: Reset Database" size="md">
         <div>
             <div className="bg-red-100 border-l-4 border-red-600 p-4 mb-6">
                 <h3 className="text-red-800 font-bold text-lg mb-2">WARNING: IRREVERSIBLE ACTION</h3>
@@ -489,7 +504,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         </div>
       </Modal>
 
-      <Modal isOpen={isImportSummaryOpen} onClose={() => setIsImportSummaryOpen(false)} title="Import Summary">
+      <Modal isOpen={isImportSummaryOpen} onClose={() => setIsImportSummaryOpen(false)} title="Import Summary" size="lg">
         <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
@@ -534,7 +549,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         </div>
       </Modal>
 
-      <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code">
+      <Modal isOpen={isQrModalOpen} onClose={() => setIsQrModalOpen(false)} title="Employee QR Code" size="md">
         {selectedWorker && (
             <div className="flex flex-col items-center justify-center p-4">
                 <div id="printable-qr" className="flex flex-col items-center text-center">

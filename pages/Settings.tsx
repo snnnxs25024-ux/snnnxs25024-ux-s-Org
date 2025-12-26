@@ -7,6 +7,8 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import AddIcon from '../components/icons/AddIcon';
 import UploadIcon from '../components/icons/UploadIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
+import { useToast } from '../hooks/useToast';
+import Modal from '../components/Modal';
 
 const Settings: React.FC = () => {
     const [divisions, setDivisions] = useState<MasterData[]>([]);
@@ -16,7 +18,10 @@ const Settings: React.FC = () => {
     const [newItemValue, setNewItemValue] = useState('');
     const [activeTab, setActiveTab] = useState<'DIVISION' | 'SHIFT_TIME' | 'SHIFT_ID'>('DIVISION');
     const [actionLoading, setActionLoading] = useState(false);
+    const [itemToDelete, setItemToDelete] = useState<MasterData | null>(null);
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const { showToast } = useToast();
 
     useEffect(() => {
         fetchMasterData();
@@ -32,6 +37,7 @@ const Settings: React.FC = () => {
         }
         if (error) {
             console.error("Error fetching master data (Make sure table 'master_data' exists):", error);
+            showToast('Gagal memuat master data.', { type: 'error', title: 'Error' });
         }
         setLoading(false);
     };
@@ -47,26 +53,35 @@ const Settings: React.FC = () => {
         }).select().single();
 
         if (error) {
-            alert("Gagal menambah data: " + error.message);
+            showToast(`Gagal menambah data: ${error.message}`, { type: 'error', title: 'Error' });
         } else if (data) {
             setNewItemValue('');
             updateLocalState(data, 'add');
+            showToast(`'${data.value}' berhasil ditambahkan.`, { type: 'success', title: 'Berhasil' });
         }
         setActionLoading(false);
     };
 
-    const handleDelete = async (id: number) => {
-        if (!window.confirm("Yakin hapus data ini?")) return;
+    const openDeleteConfirm = (item: MasterData) => {
+        setItemToDelete(item);
+        setIsDeleteConfirmOpen(true);
+    };
+
+    const handleDelete = async () => {
+        if (!itemToDelete) return;
         
         setActionLoading(true);
-        const { error } = await supabase.from('master_data').delete().eq('id', id);
+        const { error } = await supabase.from('master_data').delete().eq('id', itemToDelete.id);
         
         if (error) {
-            alert("Gagal menghapus: " + error.message);
+            showToast(`Gagal menghapus: ${error.message}`, { type: 'error', title: 'Error' });
         } else {
-            updateLocalState({ id, category: activeTab, value: '' }, 'delete');
+            showToast(`'${itemToDelete.value}' berhasil dihapus.`, { type: 'success', title: 'Berhasil Dihapus' });
+            updateLocalState(itemToDelete, 'delete');
         }
         setActionLoading(false);
+        setIsDeleteConfirmOpen(false);
+        setItemToDelete(null);
     };
 
     const updateLocalState = (item: MasterData, action: 'add' | 'delete') => {
@@ -117,7 +132,7 @@ const Settings: React.FC = () => {
                 const data = XLSX.utils.sheet_to_json(ws) as { value: string }[];
 
                 if (data.length === 0) {
-                    alert("File kosong atau format salah. Pastikan ada kolom 'value'.");
+                    showToast("File kosong atau format salah. Pastikan ada kolom 'value'.", { type: 'error', title: 'Impor Gagal' });
                     setActionLoading(false);
                     return;
                 }
@@ -141,20 +156,20 @@ const Settings: React.FC = () => {
                 const uniqueToInsert = toInsert.filter((v, i, a) => a.findIndex(t => t.value.toLowerCase() === v.value.toLowerCase()) === i);
 
                 if (uniqueToInsert.length === 0) {
-                    alert("Tidak ada data baru untuk diimpor (semua data mungkin sudah ada).");
+                    showToast("Tidak ada data baru untuk diimpor (semua data mungkin sudah ada).", { type: 'info', title: 'Info Impor' });
                 } else {
                     const { data: insertedData, error } = await supabase.from('master_data').insert(uniqueToInsert).select();
                     
                     if (error) throw error;
                     
                     if (insertedData) {
-                        alert(`Berhasil mengimpor ${insertedData.length} data baru.`);
+                        showToast(`Berhasil mengimpor ${insertedData.length} data baru.`, { type: 'success', title: 'Impor Sukses' });
                         // Refresh data manually to ensure sync
                         fetchMasterData();
                     }
                 }
             } catch (err: any) {
-                alert("Gagal import: " + err.message);
+                showToast("Gagal import: " + err.message, { type: 'error', title: 'Error' });
                 console.error(err);
             } finally {
                 setActionLoading(false);
@@ -174,7 +189,7 @@ const Settings: React.FC = () => {
                         <li key={item.id} className="p-3 flex justify-between items-center hover:bg-gray-50">
                             <span className="font-medium text-gray-700">{item.value}</span>
                             <button 
-                                onClick={() => handleDelete(item.id)} 
+                                onClick={() => openDeleteConfirm(item)} 
                                 disabled={actionLoading}
                                 className="text-red-400 hover:text-red-600 p-1 rounded-full hover:bg-red-50 transition-colors"
                             >
@@ -276,6 +291,28 @@ const Settings: React.FC = () => {
                     <li>Fitur Import Excel akan otomatis melewati data yang sudah ada di database (tidak duplikat).</li>
                 </ul>
             </div>
+
+            <Modal isOpen={isDeleteConfirmOpen} onClose={() => setIsDeleteConfirmOpen(false)} title="Konfirmasi Hapus" size="sm" scrollable={false}>
+                {itemToDelete && (
+                    <div>
+                        <p className="text-gray-600">
+                            Apakah Anda yakin ingin menghapus <strong>'{itemToDelete.value}'</strong>?
+                        </p>
+                        <div className="flex justify-end gap-3 mt-6">
+                            <button onClick={() => setIsDeleteConfirmOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">
+                                Batal
+                            </button>
+                            <button 
+                                onClick={handleDelete} 
+                                disabled={actionLoading}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold"
+                            >
+                                {actionLoading ? 'Menghapus...' : 'Ya, Hapus'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };

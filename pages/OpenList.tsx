@@ -1,9 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabaseClient';
 import { AttendanceSession, AttendanceRecord, Worker } from '../types';
 import CopyIcon from '../components/icons/CopyIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
+import { useToast } from '../hooks/useToast';
+import Modal from '../components/Modal';
 
 interface OpenListProps {
   workers: Worker[];
@@ -32,6 +35,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [autoClose, setAutoClose] = useState(true);
+  const [isCloseConfirmOpen, setIsCloseConfirmOpen] = useState(false);
+  const { showToast } = useToast();
 
   // Dynamic Options
   const [shiftIdOpts, setShiftIdOpts] = useState<string[]>(defaultShiftIds);
@@ -203,25 +208,29 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     if (insertError) {
       setError(insertError.message);
       setIsLoading(false);
+      showToast(`Gagal membuat link: ${insertError.message}`, { type: 'error', title: 'Error' });
     } else {
       setActiveSession({ ...sessionData, records: [] });
+      showToast('Link absensi publik berhasil dibuat.', { type: 'success', title: 'Berhasil Dibuat' });
       setIsLoading(false);
     }
   };
 
   const handleCloseSession = async () => {
       if (!activeSession) return;
-      const confirmClose = window.confirm("Apakah Anda yakin ingin menutup sesi ini?");
-      if (!confirmClose) return;
+      setIsCloseConfirmOpen(false);
       const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', activeSession.id);
       if (error) {
-          alert("Gagal menutup sesi: " + error.message);
+          showToast("Gagal menutup sesi: " + error.message, { type: 'error', title: 'Error' });
           return;
       }
+      showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
       const sessionId = activeSession.id;
       setActiveSession(null);
       setLiveRecords([]);
-      window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
+      setTimeout(() => {
+        window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
+      }, 1500);
   };
 
   const getPublicLink = () => {
@@ -232,14 +241,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const copyToClipboard = () => {
       navigator.clipboard.writeText(getPublicLink());
       setCopySuccess(true);
+      showToast('Link berhasil disalin ke clipboard.', { type: 'success', title: 'Tersalin!' });
       setTimeout(() => setCopySuccess(false), 2000);
   };
 
   const handleDeleteRecord = async (recordId: number) => {
-      if(!confirm("Are you sure you want to remove this entry?")) return;
       const { error } = await supabase.from('attendance_records').delete().eq('id', recordId);
-      if(error) alert("Failed to delete");
-      else setLiveRecords(prev => prev.filter(r => r.id !== recordId));
+      if(error) {
+        showToast(`Gagal menghapus: ${error.message}`, { type: 'error', title: 'Error' });
+      } else {
+        showToast('Data berhasil dihapus dari sesi ini.', { type: 'success', title: 'Berhasil Dihapus' });
+        setLiveRecords(prev => prev.filter(r => r.id !== recordId));
+      }
   };
 
   return (
@@ -321,7 +334,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                                    <CopyIcon /> {copySuccess ? 'Copied!' : 'Copy'}
                                </button>
                            </div>
-                           <button onClick={handleCloseSession} className="bg-red-600 hover:bg-red-700 text-white font-black py-2 px-6 rounded-lg shadow-sm w-full md:w-auto uppercase text-xs tracking-widest">
+                           <button onClick={() => setIsCloseConfirmOpen(true)} className="bg-red-600 hover:bg-red-700 text-white font-black py-2 px-6 rounded-lg shadow-sm w-full md:w-auto uppercase text-xs tracking-widest">
                                Tutup Sesi
                            </button>
                       </div>
@@ -404,6 +417,20 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
               </div>
           </div>
       )}
+
+      <Modal isOpen={isCloseConfirmOpen} onClose={() => setIsCloseConfirmOpen(false)} title="Tutup Sesi Publik" size="sm" scrollable={false}>
+          <div>
+              <p className="text-gray-600">Apakah Anda yakin ingin menutup sesi ini? Link absensi akan menjadi tidak aktif.</p>
+              <div className="flex justify-end gap-3 mt-6">
+                  <button onClick={() => setIsCloseConfirmOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">
+                      Batal
+                  </button>
+                  <button onClick={handleCloseSession} className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-bold">
+                      Ya, Tutup Sesi
+                  </button>
+              </div>
+          </div>
+      </Modal>
     </div>
   );
 };

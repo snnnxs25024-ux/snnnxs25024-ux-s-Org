@@ -12,6 +12,7 @@ import WelcomePage from './pages/WelcomePage';
 import { Worker, AttendanceSession, AttendanceRecord } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
+import { ToastProvider } from './contexts/ToastContext';
 
 export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
 
@@ -257,31 +258,33 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f8f9fc] text-gray-800 font-sans">
-      <Sidebar 
-        currentPage={currentPage} 
-        setCurrentPage={setCurrentPage} 
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
-        <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
-           <div className="flex items-center gap-3">
-              <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-8 w-8 object-contain" />
-              <div>
-                <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENIN</h1>
-                <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Attendance Portal</p>
-              </div>
-           </div>
-          <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
-            <HamburgerIcon />
-          </button>
+    <ToastProvider>
+        <div className="flex min-h-screen bg-[#f8f9fc] text-gray-800 font-sans">
+        <Sidebar 
+            currentPage={currentPage} 
+            setCurrentPage={setCurrentPage} 
+            isOpen={isSidebarOpen}
+            onClose={() => setIsSidebarOpen(false)}
+        />
+        <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
+            <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
+            <div className="flex items-center gap-3">
+                <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-8 w-8 object-contain" />
+                <div>
+                    <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENIN</h1>
+                    <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Attendance Portal</p>
+                </div>
+            </div>
+            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
+                <HamburgerIcon />
+            </button>
+            </div>
+            <div className="flex-1 p-4 sm:p-6 lg:p-10 overflow-y-auto no-scrollbar">
+                {renderPage()}
+            </div>
+        </main>
         </div>
-        <div className="flex-1 p-4 sm:p-6 lg:p-10 overflow-y-auto no-scrollbar">
-            {renderPage()}
-        </div>
-      </main>
-    </div>
+    </ToastProvider>
   );
 };
 

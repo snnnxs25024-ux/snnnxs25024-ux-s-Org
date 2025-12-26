@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface ModalProps {
@@ -7,10 +6,19 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   scrollable?: boolean;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '5xl';
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrollable = true }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrollable = true, size = '5xl' }) => {
   if (!isOpen) return null;
+
+  const sizeClasses = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '5xl': 'max-w-5xl'
+  };
 
   return (
     <div
@@ -18,7 +26,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrolla
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-2xl w-full max-w-5xl p-6 border border-gray-200 transform transition-all duration-300 scale-95 animate-scale-in flex flex-col max-h-[90vh]"
+        className={`bg-white rounded-xl shadow-2xl w-full p-6 border border-gray-200 transform transition-all duration-300 scale-95 animate-scale-in flex flex-col max-h-[90vh] ${sizeClasses[size]}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center pb-3 border-b border-gray-200 shrink-0">
@@ -33,7 +41,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, scrolla
             </svg>
           </button>
         </div>
-        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : 'flex-1 flex flex-col overflow-hidden'}`}>
+        <div className={`mt-4 ${scrollable ? 'overflow-y-auto' : ''}`}>
             {children}
         </div>
       </div>
