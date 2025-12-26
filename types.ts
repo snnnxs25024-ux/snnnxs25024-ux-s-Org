@@ -1,19 +1,4 @@
 
-export interface Company {
-  id: string;
-  name: string;
-  created_at: string;
-}
-
-export interface Profile {
-  id: string;
-  user_id: string;
-  company_id: string;
-  full_name?: string;
-  nik?: string;
-  phone?: string;
-}
-
 export interface Worker {
   id?: string;
   opsId: string;
@@ -24,7 +9,6 @@ export interface Worker {
   department: string;
   createdAt: string;
   status: 'Active' | 'Non Active' | 'Blacklist';
-  company_id?: string;
 }
 
 export interface AttendanceRecord {
@@ -38,7 +22,6 @@ export interface AttendanceRecord {
   manual_status?: 'Partial' | 'Buffer' | null; // New field for manual additions
   is_takeout: boolean; // New field for takeout status
   is_arrived?: boolean; // New field for physical arrival confirmation (OTW vs Hadir)
-  company_id?: string;
 }
 
 export interface AttendanceSession {
@@ -52,12 +35,10 @@ export interface AttendanceSession {
   session_type?: 'MANUAL' | 'PUBLIC'; // Distinguish between Admin Manual session and Open List Public session
   auto_close?: boolean; // New field for auto-closing toggle
   records: AttendanceRecord[];
-  company_id?: string;
 }
 
 export interface MasterData {
     id: number;
     category: 'DIVISION' | 'SHIFT_TIME' | 'SHIFT_ID';
     value: string;
-    company_id?: string;
 }

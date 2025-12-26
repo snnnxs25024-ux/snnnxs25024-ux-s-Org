@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Page } from '../App';
 import { supabase } from '../lib/supabaseClient';
-import { Profile } from '../types';
 import DashboardIcon from './icons/DashboardIcon';
 import AttendanceIcon from './icons/AttendanceIcon';
 import DatabaseIcon from './icons/DatabaseIcon';
@@ -14,7 +13,6 @@ interface SidebarProps {
   setCurrentPage: (page: Page) => void;
   isOpen: boolean; 
   onClose: () => void;
-  userProfile: Profile | null;
 }
 
 const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
@@ -52,15 +50,13 @@ const NavItem: React.FC<{
   </li>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, onClose, userProfile }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, onClose }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const handleLogout = async () => {
     const confirmLogout = window.confirm("Apakah Anda yakin ingin keluar dari sistem?");
     if (confirmLogout) {
       await supabase.auth.signOut();
-      // Redirect to login page after sign out
-      window.location.href = '/';
     }
   };
 
@@ -162,11 +158,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
             <div className="flex items-center justify-between bg-gray-50 p-2 rounded-xl border border-gray-100">
                <div className="flex items-center gap-3 overflow-hidden">
                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center p-1 overflow-hidden shrink-0">
-                   <img src={`https://api.dicebear.com/7.x/initials/svg?seed=${userProfile?.full_name || 'Admin'}`} alt="Avatar" className="w-full h-full object-cover rounded-md" />
+                   <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
                  </div>
                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-gray-700 truncate">{userProfile?.full_name || 'Administrator'}</p>
-                    <p className="text-[9px] text-gray-400 truncate tracking-tight">{supabase.auth.getSession()?.data.session?.user.email}</p>
+                    <p className="text-xs font-bold text-gray-700 truncate">Admin</p>
+                    <p className="text-[9px] text-gray-400 truncate tracking-tight">Akun Administrator</p>
                  </div>
                </div>
                <button 

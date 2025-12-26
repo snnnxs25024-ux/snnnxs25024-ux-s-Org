@@ -1,6 +1,6 @@
 {
-  "name": "ABSENIN - Attendance Platform",
-  "description": "The All-in-One Attendance Management Platform for any company. Efficient, Real-time, and Futuristic.",
+  "name": "ABSENIN",
+  "description": "Sistem Manajemen Absensi Terpadu. Efisien, Real-time, dan Futuristik.",
   "requestFramePermissions": [
     "camera"
   ]
