@@ -1162,8 +1162,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         </div>
                         
                         {/* --- SCROLLABLE MIDDLE SECTION --- */}
-                        <div className="flex-1 min-h-0 overflow-auto border rounded-lg">
-                            <table className="w-full text-left text-sm relative" style={{ minWidth: '1200px' }}>
+                        <div className="flex-1 min-h-0 overflow-y-auto border rounded-lg">
+                            <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
                                         <th className="p-2 font-semibold">Kehadiran Fisik</th>
