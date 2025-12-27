@@ -202,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer' | 'On Plan'>('On Plan');
     const [manualAddError, setManualAddError] = useState<string | null>(null);
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
-    const [detailReportData, setDetailReportData] = useState<{ workerName: string; period: string; dates: { date: string; shiftTime: string; division: string }[], total: number } | null>(null);
+    const [detailReportData, setDetailReportData] = useState<{ workerName: string; opsId: string; period: string; dates: { date: string; shiftTime: string; division: string }[], total: number } | null>(null);
     const [isEditingSession, setIsEditingSession] = useState(false);
     const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState<'ops' | 'excel' | null>(null);
@@ -211,6 +211,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [qrWorkerData, setQrWorkerData] = useState<{ fullName: string; opsId: string; department: string } | null>(null);
     const { showToast } = useToast();
     
+    const [manualAddSuggestions, setManualAddSuggestions] = useState<Worker[]>([]);
+    const manualAddSearchRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
     // Dynamic Options
@@ -272,18 +274,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
                 setIsCopyDropdownOpen(false);
             }
+            if (manualAddSearchRef.current && !manualAddSearchRef.current.contains(event.target as Node)) {
+                setManualAddSuggestions([]);
+            }
         };
 
-        if (isCopyDropdownOpen) {
-            document.addEventListener('mousedown', handleClickOutside);
-        } else {
-            document.removeEventListener('mousedown', handleClickOutside);
-        }
-
+        document.addEventListener('mousedown', handleClickOutside);
         return () => {
             document.removeEventListener('mousedown', handleClickOutside);
         };
-    }, [isCopyDropdownOpen]);
+    }, []);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
 
@@ -561,9 +561,33 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             setIsManageModalOpen(false);
         }
     };
+
+    const handleManualAddOpsIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const query = e.target.value;
+        setManualAddOpsId(query);
+        setManualAddError(null);
+
+        if (query.length > 1 && selectedSession) {
+            const sessionRecordOpsIds = new Set(selectedSession.records.map(r => r.opsId));
+            const availableWorkers = workers.filter(w => 
+                !sessionRecordOpsIds.has(w.opsId) &&
+                w.status === 'Active' &&
+                (w.opsId.toLowerCase().includes(query.toLowerCase()) || w.fullName.toLowerCase().includes(query.toLowerCase()))
+            );
+            setManualAddSuggestions(availableWorkers.slice(0, 5));
+        } else {
+            setManualAddSuggestions([]);
+        }
+    };
+    
+    const handleManualAddSuggestionClick = (worker: Worker) => {
+        setManualAddOpsId(worker.opsId);
+        setManualAddSuggestions([]);
+    };
     
     const handleManualAdd = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
+        setManualAddSuggestions([]);
         if (!selectedSession || !manualAddOpsId) return;
         setManualAddError(null);
         setLoadingAction(true);
@@ -873,14 +897,126 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         
         const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}-${item.division}`, item])).values());
+        
+        const worker = workers.find(w => w.id === workerId);
 
         setDetailReportData({
             workerName,
+            opsId: worker?.opsId || 'N/A',
             period,
             dates: uniqueDetails,
             total: uniqueDetails.length
         });
         setIsDetailReportModalOpen(true);
+    };
+    
+    const handleDownloadDetailReportJpeg = async () => {
+        if (!detailReportData) return;
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        // --- Dimensions and Configuration ---
+        const width = 800;
+        const rowHeight = 60; 
+        const headerHeight = 150;
+        const footerHeight = 80;
+        const sidePadding = 40;
+        const height = headerHeight + (detailReportData.dates.length * rowHeight) + footerHeight;
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // --- Load Logo for Watermark ---
+        const logo = new Image();
+        logo.crossOrigin = 'anonymous';
+        logo.src = 'https://i.imgur.com/lie9EMX.png';
+        try {
+            await new Promise((resolve, reject) => { 
+                logo.onload = resolve;
+                logo.onerror = reject;
+            });
+        } catch (e) {
+            console.error("Could not load cross-origin image for canvas.", e);
+        }
+
+        // --- Drawing ---
+        // 1. Background
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+
+        // 2. Watermark
+        if (logo.complete && logo.naturalHeight !== 0) {
+            ctx.globalAlpha = 0.15;
+            const logoWidth = 400;
+            const logoHeight = logo.height * (logoWidth / logo.width);
+            ctx.drawImage(logo, (width - logoWidth) / 2, (height - logoHeight) / 2, logoWidth, logoHeight);
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 3. Main Header
+        ctx.fillStyle = '#1e3a8a';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('Detail Laporan Kehadiran', width / 2, 50);
+
+        // 4. Sub Header (Worker Info)
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'bold 22px Arial';
+        ctx.fillText(detailReportData.workerName, width / 2, 85);
+        
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '16px "Courier New", Courier, monospace';
+        ctx.fillText(detailReportData.opsId, width / 2, 105);
+
+        ctx.fillStyle = '#3b82f6';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText(detailReportData.period, width / 2, 130);
+
+        // 5. List of Dates
+        ctx.font = '16px Arial';
+        ctx.strokeStyle = '#e5e7eb';
+        ctx.lineWidth = 1;
+
+        detailReportData.dates.forEach((item, index) => {
+            const y = headerHeight + (index * rowHeight);
+            const yCenter = y + rowHeight / 2;
+
+            ctx.beginPath();
+            ctx.moveTo(sidePadding, y + rowHeight);
+            ctx.lineTo(width - sidePadding, y + rowHeight);
+            ctx.stroke();
+
+            ctx.fillStyle = '#1f2937';
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 16px Arial';
+            const formattedDateStr = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(item.date + 'T00:00:00'));
+            ctx.fillText(formattedDateStr, sidePadding + 20, yCenter - 5);
+            
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#4b5563';
+            ctx.fillText(item.division, sidePadding + 20, yCenter + 15);
+
+            ctx.fillStyle = '#3b82f6';
+            ctx.textAlign = 'right';
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(item.shiftTime, width - sidePadding - 20, yCenter + 5);
+        });
+
+        // 6. Footer (Total)
+        const footerY = height - footerHeight + 45;
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(`Total Kehadiran: ${detailReportData.total} Hari Kerja`, width / 2, footerY);
+
+        // --- Trigger Download ---
+        const link = document.createElement('a');
+        const safeName = detailReportData.workerName.replace(/[^a-zA-Z0-9]/g, '_');
+        link.download = `Laporan_Kehadiran_${safeName}.jpeg`;
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.click();
     };
 
     const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -1080,10 +1216,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 </div>
             </div>
 
-            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session" scrollable={false}>
+            <Modal isOpen={isManageModalOpen} onClose={() => setIsManageModalOpen(false)} title="Manage Attendance Session" scrollable={true}>
                 {selectedSession && (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        {/* --- STATIC TOP SECTION --- */}
+                    <div className="flex flex-col">
+                        {/* --- TOP SECTION --- */}
                         <div className="shrink-0">
                             {isEditingSession ? (
                                 <form onSubmit={handleUpdateSession} className="space-y-4 mb-4 p-4 bg-blue-50 rounded-lg border border-blue-100">
@@ -1161,8 +1297,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             )}
                         </div>
                         
-                        {/* --- SCROLLABLE MIDDLE SECTION --- */}
-                        <div className="flex-1 min-h-0 overflow-y-auto border rounded-lg">
+                        {/* --- MIDDLE SECTION --- */}
+                        <div className="overflow-x-auto border rounded-lg">
                             <table className="w-full text-left text-sm relative">
                                 <thead className="bg-blue-600 text-white sticky top-0 z-10">
                                     <tr>
@@ -1248,13 +1384,37 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </table>
                         </div>
 
-                        {/* --- STATIC BOTTOM SECTION --- */}
+                        {/* --- BOTTOM SECTION --- */}
                         <div className="shrink-0 mt-4 pt-4 border-t border-gray-200">
-                            <form onSubmit={handleManualAdd} className="space-y-3">
+                           <form onSubmit={handleManualAdd} className="space-y-3">
                                <h4 className="text-md font-semibold text-gray-700">Tambah Karyawan Manual</h4>
                                {manualAddError && <p className="text-red-600 bg-red-50 p-2 rounded-lg text-sm">{manualAddError}</p>}
                                <div className="flex flex-col sm:flex-row gap-2">
-                                   <input type="text" value={manualAddOpsId} onChange={(e) => setManualAddOpsId(e.target.value)} placeholder="OpsID Karyawan" className="flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required />
+                                   <div className="relative flex-grow" ref={manualAddSearchRef}>
+                                       <input 
+                                           type="text" 
+                                           value={manualAddOpsId} 
+                                           onChange={handleManualAddOpsIdChange} 
+                                           placeholder="Ketik OpsID atau Nama Karyawan..." 
+                                           className="w-full flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                                           required 
+                                           autoComplete="off"
+                                       />
+                                       {manualAddSuggestions.length > 0 && (
+                                           <ul className="absolute z-20 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto bottom-full mb-2">
+                                               {manualAddSuggestions.map(worker => (
+                                                   <li 
+                                                       key={worker.id} 
+                                                       onClick={() => handleManualAddSuggestionClick(worker)} 
+                                                       className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+                                                   >
+                                                       <p className="font-semibold text-sm text-gray-800">{worker.fullName}</p>
+                                                       <p className="text-xs text-black font-mono">{worker.opsId}</p>
+                                                   </li>
+                                               ))}
+                                           </ul>
+                                       )}
+                                   </div>
                                    <select value={manualAddStatus} onChange={(e) => setManualAddStatus(e.target.value as 'Partial' | 'Buffer' | 'On Plan')} className="bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                        <option value="On Plan">On Plan</option>
                                        <option value="Partial">Partial</option>
@@ -1374,13 +1534,15 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 )}
             </Modal>
             
-            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title={`Detail Kehadiran: ${detailReportData?.workerName}`} scrollable={false}>
+            <Modal isOpen={isDetailReportModalOpen} onClose={() => setIsDetailReportModalOpen(false)} title="Detail Kehadiran" scrollable={true}>
                 {detailReportData && (
-                    <div className="flex flex-col h-full overflow-hidden">
-                        <div className="shrink-0 border-b pb-2 mb-2">
-                             <p className="font-semibold text-gray-700 text-lg">{detailReportData.period}</p>
+                    <div className="flex flex-col">
+                        <div className="shrink-0 border-b pb-3 mb-3 text-center">
+                             <h3 className="text-xl font-bold text-gray-800">{detailReportData.workerName}</h3>
+                             <p className="text-sm text-gray-500 font-mono mt-1">{detailReportData.opsId}</p>
+                             <p className="font-semibold text-blue-600 text-lg mt-2">{detailReportData.period}</p>
                         </div>
-                        <div className="flex-1 overflow-y-auto border rounded-lg bg-white shadow-sm min-h-0">
+                        <div className="border rounded-lg bg-white shadow-sm">
                              <ul className="divide-y divide-gray-100">
                                 {detailReportData.dates.length > 0 ? (
                                     detailReportData.dates.map((item, index) => (
@@ -1405,11 +1567,17 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 )}
                              </ul>
                         </div>
-                        <div className="shrink-0 mt-2">
-                            <div className="bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200">
+                        <div className="shrink-0 mt-4 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                            <div className="w-full bg-gray-50 p-4 rounded-lg flex justify-between items-center border border-gray-200">
                                  <span className="text-gray-600 font-medium">Total Kehadiran</span>
                                  <span className="text-xl font-bold text-blue-600">{detailReportData.total} Hari Kerja</span>
                             </div>
+                            <button
+                                onClick={handleDownloadDetailReportJpeg}
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-5 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                            >
+                                <DownloadIcon /> Download JPEG
+                            </button>
                         </div>
                     </div>
                 )}

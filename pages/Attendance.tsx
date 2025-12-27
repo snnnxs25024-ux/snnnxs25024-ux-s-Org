@@ -51,7 +51,9 @@ const Attendance: React.FC<AttendanceProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Worker[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
   
   // Dynamic Options
@@ -90,6 +92,18 @@ const Attendance: React.FC<AttendanceProps> = ({
     }
   }, [isModalOpen, activeSession])
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+            setSuggestions([]);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
   const handleStartSession = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -107,9 +121,34 @@ const Attendance: React.FC<AttendanceProps> = ({
     }
   };
   
+  const handleOpsIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setOpsIdInput(query);
+    setError(null);
+
+    if (query.length > 1) {
+        const activeRecordOpsIds = new Set(activeRecords.map(r => r.opsId));
+        const availableWorkers = workers.filter(w => 
+            !activeRecordOpsIds.has(w.opsId) &&
+            w.status === 'Active' &&
+            (w.opsId.toLowerCase().includes(query.toLowerCase()) || w.fullName.toLowerCase().includes(query.toLowerCase()))
+        );
+        setSuggestions(availableWorkers.slice(0, 5));
+    } else {
+        setSuggestions([]);
+    }
+  };
+
+  const handleSuggestionClick = (worker: Worker) => {
+      setOpsIdInput(worker.opsId);
+      setSuggestions([]);
+      inputRef.current?.focus();
+  };
+  
   const handleScan = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!opsIdInput.trim() || !activeSession) return;
+      setSuggestions([]);
 
       const worker = workers.find(w => w.opsId.toLowerCase() === opsIdInput.toLowerCase() && w.status === 'Active');
 
@@ -306,14 +345,31 @@ const Attendance: React.FC<AttendanceProps> = ({
             </div>
 
             <form onSubmit={handleScan} className="flex flex-col sm:flex-row gap-4">
-                <input
-                    ref={inputRef}
-                    type="text"
-                    value={opsIdInput}
-                    onChange={(e) => setOpsIdInput(e.target.value)}
-                    placeholder="Scan or type OpsID..."
-                    className="flex-grow bg-white border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="relative flex-grow" ref={searchRef}>
+                    <input
+                        ref={inputRef}
+                        type="text"
+                        value={opsIdInput}
+                        onChange={handleOpsIdChange}
+                        placeholder="Scan or type OpsID/Name..."
+                        className="w-full bg-white border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        autoComplete="off"
+                    />
+                    {suggestions.length > 0 && (
+                        <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
+                            {suggestions.map(worker => (
+                                <li 
+                                    key={worker.id} 
+                                    onClick={() => handleSuggestionClick(worker)} 
+                                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+                                >
+                                    <p className="font-semibold text-sm text-gray-800">{worker.fullName}</p>
+                                    <p className="text-xs text-black font-mono">{worker.opsId}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </div>
                 <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-sm hover:shadow-md">
                     Submit
                 </button>
