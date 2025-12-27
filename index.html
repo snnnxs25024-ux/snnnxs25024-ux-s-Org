@@ -30,48 +30,75 @@
         background: #2563eb; /* blue-600 */
       }
 
-      /* Print Styling for Thermal Printer - FIXED */
+      /* Print Styling for Thermal Printer - ENHANCED */
       @media print {
         @page {
+          /* Common thermal printer widths are 58mm or 80mm */
+          size: 58mm auto;
           margin: 0;
-          size: auto;
         }
         
         body {
           background-color: white;
           margin: 0;
           padding: 0;
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
         }
 
-        /* Sembunyikan semua elemen di body */
+        /* Hide all elements by default */
         body * {
           visibility: hidden;
         }
 
-        /* Tampilkan HANYA container QR dan anak-anaknya */
+        /* Show ONLY the printable container and its children */
         #printable-qr, #printable-qr * {
           visibility: visible;
         }
 
-        /* Posisikan container QR di paling atas menutupi yang lain */
+        /* Position the printable container to fill the page */
         #printable-qr {
           position: absolute;
-          left: 0;
+          left: 50%;
+          transform: translateX(-50%);
           top: 0;
-          width: 100%;
+          width: 58mm;
           margin: 0;
-          padding: 10px 0;
+          padding: 3mm 0;
           display: flex;
           flex-direction: column;
           align-items: center;
           justify-content: flex-start;
           background-color: white;
-          z-index: 9999;
         }
 
-        /* Pastikan elemen dengan class no-print benar-benar hilang layoutnya */
         .no-print {
           display: none !important;
+        }
+
+        /* Style elements inside the printable area */
+        #printable-qr h1 {
+          font-size: 14pt !important;
+          font-weight: 900 !important;
+          margin-bottom: 2mm !important;
+          color: black !important;
+        }
+        #printable-qr img {
+          width: 40mm !important;
+          height: 40mm !important;
+        }
+        #printable-qr h2 {
+          font-size: 12pt !important;
+          font-weight: 900 !important;
+          margin-top: 4mm !important;
+          margin-bottom: 0 !important;
+          color: black !important;
+        }
+        #printable-qr p {
+          font-size: 10pt !important;
+          margin-top: 1.5mm !important;
+          color: black !important;
+          font-weight: 700 !important;
         }
       }
     </style>
