@@ -242,7 +242,7 @@ const App: React.FC = () => {
       case 'Open List':
           return <OpenList workers={workers} />;
       case 'Data Base':
-        return <Database workers={workers} refreshData={fetchData} />;
+        return <Database workers={workers} setWorkers={setWorkers} />;
       case 'Pengaturan':
           return <Settings />;
       default:

@@ -18,7 +18,7 @@ import { useToast } from '../hooks/useToast';
 
 interface DatabaseProps {
   workers: Worker[];
-  refreshData: () => void;
+  setWorkers: React.Dispatch<React.SetStateAction<Worker[]>>;
 }
 
 // Helper Components
@@ -53,7 +53,7 @@ const SelectField = ({ label, name, defaultValue, options, required = false }: a
   </div>
 );
 
-const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
+const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -279,23 +279,39 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         status: formData.get('status') as Worker['status'],
     };
     
-    let error;
-    if (selectedWorker) {
-      const { error: updateError } = await supabase.from('workers').update(workerData).eq('id', selectedWorker.id);
-      error = updateError;
-    } else {
-      const { error: insertError } = await supabase.from('workers').insert([{ ...workerData, createdAt: new Date().toISOString() }]);
-      error = insertError;
-    }
-    
-    setLoadingAction(false);
-    if (error) {
-        showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menyimpan' });
-    } else {
-      setIsEditModalOpen(false);
-      setSelectedWorker(null);
-      showToast('Data karyawan berhasil disimpan.', { type: 'success', title: 'Berhasil' });
-      refreshData();
+    if (selectedWorker) { // UPDATE
+      const { data: updatedWorker, error } = await supabase
+        .from('workers')
+        .update(workerData)
+        .eq('id', selectedWorker.id)
+        .select()
+        .single();
+      
+      setLoadingAction(false);
+      if (error) {
+          showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menyimpan' });
+      } else if (updatedWorker) {
+        setWorkers(prev => prev.map(w => w.id === updatedWorker.id ? updatedWorker : w));
+        setIsEditModalOpen(false);
+        setSelectedWorker(null);
+        showToast('Data karyawan berhasil diperbarui.', { type: 'success', title: 'Berhasil' });
+      }
+    } else { // CREATE
+      const { data: newWorker, error } = await supabase
+        .from('workers')
+        .insert([{ ...workerData, createdAt: new Date().toISOString() }])
+        .select()
+        .single();
+      
+      setLoadingAction(false);
+      if (error) {
+          showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menyimpan' });
+      } else if (newWorker) {
+        setWorkers(prev => [...prev, newWorker]);
+        setIsEditModalOpen(false);
+        setSelectedWorker(null);
+        showToast('Karyawan baru berhasil ditambahkan.', { type: 'success', title: 'Berhasil' });
+      }
     }
   };
 
@@ -307,10 +323,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         if (error) {
             showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Menghapus' });
         } else {
+            setWorkers(prev => prev.filter(w => w.id !== workerToDelete.id));
             setIsDeleteConfirmOpen(false);
             setWorkerToDelete(null);
             showToast(`${workerToDelete.fullName} berhasil dihapus.`, { type: 'success', title: 'Berhasil Dihapus' });
-            refreshData();
         }
     }
   }
@@ -322,9 +338,9 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     if (error) {
         showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Reset' });
     } else {
+      setWorkers([]);
       showToast('Semua data karyawan berhasil dihapus.', { type: 'success', title: 'Database Direset' });
       setIsDeleteAllConfirmOpen(false);
-      refreshData();
     }
   };
   
@@ -416,8 +432,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         });
         
         if (successfulInserts.length > 0) {
+            setWorkers(prev => [...prev, ...successfulInserts]);
             showToast(`${successfulInserts.length} data berhasil diimpor.`, { type: 'success', title: 'Impor Berhasil' });
-            refreshData();
         }
         if (failedImports.length > 0 || dbSaveFailed.length > 0) {
             showToast(`${failedImports.length + dbSaveFailed.length} data gagal diimpor. Cek summary.`, { type: 'error', title: 'Impor Gagal Sebagian' });
