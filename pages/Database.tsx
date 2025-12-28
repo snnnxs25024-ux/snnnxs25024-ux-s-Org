@@ -2,7 +2,7 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
-import { Worker } from '../types';
+import { Worker, Profile } from '../types';
 import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
 import EditIcon from '../components/icons/EditIcon';
@@ -17,6 +17,7 @@ import SearchIcon from '../components/icons/SearchIcon';
 import { useToast } from '../hooks/useToast';
 
 interface DatabaseProps {
+  profile: Profile;
   workers: Worker[];
   setWorkers: React.Dispatch<React.SetStateAction<Worker[]>>;
 }
@@ -53,7 +54,7 @@ const SelectField = ({ label, name, defaultValue, options, required = false }: a
   </div>
 );
 
-const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
+const Database: React.FC<DatabaseProps> = ({ profile, workers, setWorkers }) => {
   const [selectedWorker, setSelectedWorker] = useState<Worker | null>(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -74,7 +75,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
   // Fetch Divisions for Dropdown & Validation
   useEffect(() => {
     const fetchDivisions = async () => {
-        const { data } = await supabase.from('master_data').select('value').eq('category', 'DIVISION').order('value', { ascending: true });
+        if (!profile.company_id) return;
+        const { data } = await supabase.from('master_data').select('value').eq('category', 'DIVISION').eq('company_id', profile.company_id).order('value', { ascending: true });
         if (data && data.length > 0) {
             setDivisionOpts(data.map(d => d.value));
         } else {
@@ -82,7 +84,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
         }
     };
     fetchDivisions();
-  }, []);
+  }, [profile.company_id]);
 
   const filteredWorkers = useMemo(() => {
     return workers
@@ -267,6 +269,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
 
   const handleSaveWorker = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!profile.company_id) {
+        showToast('Kesalahan: ID Perusahaan tidak ditemukan.', { type: 'error' });
+        return;
+    }
     setLoadingAction(true);
     const formData = new FormData(e.currentTarget);
     const workerData = {
@@ -277,6 +283,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
         contractType: formData.get('contractType') as Worker['contractType'],
         department: formData.get('department') as string,
         status: formData.get('status') as Worker['status'],
+        company_id: profile.company_id, // Always include company_id
     };
     
     if (selectedWorker) { // UPDATE
@@ -332,8 +339,13 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
   }
 
   const handleDeleteAllWorkers = async () => {
+    if (!profile.company_id) {
+        showToast('Kesalahan: ID Perusahaan tidak ditemukan.', { type: 'error' });
+        return;
+    }
     setLoadingAction(true);
-    const { error } = await supabase.from('workers').delete().not('id', 'is', null);
+    // IMPORTANT: Only delete workers belonging to the current company
+    const { error } = await supabase.from('workers').delete().eq('company_id', profile.company_id);
     setLoadingAction(false);
     if (error) {
         showToast(`Error: ${error.message}`, { type: 'error', title: 'Gagal Reset' });
@@ -356,7 +368,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
   };
   
   const handleExport = () => {
-    const dataToExport = workers.map(({ id, createdAt, ...rest }) => rest);
+    const dataToExport = workers.map(({ id, createdAt, company_id, ...rest }) => rest);
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Workers');
@@ -365,7 +377,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (!file || !profile.company_id) return;
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -404,6 +416,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, setWorkers }) => {
                 opsId: opsId, fullName: row.fullName, nik: row.nik.toString(), phone: row.phone.toString(),
                 contractType: 'Daily Worker Vendor', department: matchedDept, status: row.status,
                 createdAt: new Date().toISOString(),
+                company_id: profile.company_id, // Add company_id on import
             });
         }
         

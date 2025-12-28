@@ -1,6 +1,16 @@
 
+export interface Profile {
+  id: string;
+  role: 'super_admin' | 'company_admin' | 'employee';
+  company_id: string; // Tipe diubah menjadi non-nullable, karena setiap profil sekarang PASTI punya perusahaan.
+  full_name: string | null;
+  worker_id: string | null;
+  email?: string;
+}
+
 export interface Worker {
   id?: string;
+  company_id: string;
   opsId: string;
   fullName: string;
   nik: string;
@@ -26,6 +36,7 @@ export interface AttendanceRecord {
 
 export interface AttendanceSession {
   id: string; // Unique identifier for the session
+  company_id: string;
   date: string; // YYYY-MM-DD
   division: string;
   shiftTime: string;
@@ -39,6 +50,7 @@ export interface AttendanceSession {
 
 export interface MasterData {
     id: number;
+    company_id: string;
     category: 'DIVISION' | 'SHIFT_TIME' | 'SHIFT_ID';
     value: string;
 }

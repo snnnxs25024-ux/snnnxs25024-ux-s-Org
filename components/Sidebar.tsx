@@ -9,8 +9,10 @@ import LinkIcon from './icons/LinkIcon';
 import SettingsIcon from './icons/SettingsIcon';
 import Modal from './Modal';
 import { useToast } from '../hooks/useToast';
+import { Profile } from '../types';
 
 interface SidebarProps {
+  profile: Profile;
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
   isOpen: boolean; 
@@ -52,7 +54,7 @@ const NavItem: React.FC<{
   </li>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, onClose }) => {
+const Sidebar: React.FC<SidebarProps> = ({ profile, currentPage, setCurrentPage, isOpen, onClose }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const { showToast } = useToast();
@@ -67,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
     if (error) {
         showToast('Gagal logout, silakan coba lagi.', { type: 'error', title: 'Error' });
     } else {
-        showToast('Anda berhasil logout.', { type: 'success', title: 'Logout Berhasil' });
+        // No toast on success, the page will just reload to login
     }
   };
 
@@ -93,6 +95,12 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
       ]
     }
   ];
+  
+  const roleTextMap = {
+      'company_admin': 'Company Admin',
+      'super_admin': 'Super Admin',
+      'employee': 'Employee Account'
+  }
 
   return (
     <>
@@ -172,8 +180,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
                    <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
                  </div>
                  <div className="overflow-hidden">
-                    <p className="text-xs font-bold text-gray-700 truncate">Admin</p>
-                    <p className="text-[9px] text-gray-400 truncate tracking-tight">Akun Administrator</p>
+                    <p className="text-xs font-bold text-gray-700 truncate">{profile.full_name || 'User'}</p>
+                    <p className="text-[9px] text-gray-400 truncate tracking-tight">{roleTextMap[profile.role]}</p>
                  </div>
                </div>
                <button 

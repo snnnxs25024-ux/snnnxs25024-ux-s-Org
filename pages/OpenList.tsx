@@ -2,13 +2,14 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../lib/supabaseClient';
-import { AttendanceSession, AttendanceRecord, Worker } from '../types';
+import { AttendanceSession, AttendanceRecord, Worker, Profile } from '../types';
 import CopyIcon from '../components/icons/CopyIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
 
 interface OpenListProps {
+  profile: Profile;
   workers: Worker[];
 }
 
@@ -28,7 +29,7 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
     return `${startTime} - ${endTime}`;
 });
 
-const OpenList: React.FC<OpenListProps> = ({ workers }) => {
+const OpenList: React.FC<OpenListProps> = ({ profile, workers }) => {
   const [activeSession, setActiveSession] = useState<AttendanceSession | null>(null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -45,7 +46,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   useEffect(() => {
     const fetchMasterOptions = async () => {
-        const { data } = await supabase.from('master_data').select('*');
+        if (!profile.company_id) return;
+        const { data } = await supabase.from('master_data').select('*').eq('company_id', profile.company_id);
         if (data && data.length > 0) {
             const divs = data.filter(d => d.category === 'DIVISION').map(d => d.value);
             const times = data.filter(d => d.category === 'SHIFT_TIME').map(d => d.value);
@@ -57,12 +59,13 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         }
     };
     fetchMasterOptions();
-  }, []);
+  }, [profile.company_id]);
 
   const getTodayString = () => new Date().toISOString().split('T')[0];
 
   useEffect(() => {
       const restoreSession = async () => {
+          if (!profile.company_id) return;
           const today = getTodayString();
           const { data } = await supabase
               .from('attendance_sessions')
@@ -70,6 +73,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
               .eq('status', 'OPEN')
               .eq('date', today)
               .eq('session_type', 'PUBLIC')
+              .eq('company_id', profile.company_id)
               .order('id', { ascending: false })
               .limit(1)
               .maybeSingle();
@@ -79,7 +83,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           }
       };
       restoreSession();
-  }, []);
+  }, [profile.company_id]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -92,9 +96,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           .order('timestamp', { ascending: false });
 
         if (data) {
-// FIX: Explicitly map database record to AttendanceRecord type to avoid type mismatch.
-// The database uses snake_case (e.g., worker_id) and may have null values,
-// while the TypeScript type expects camelCase (e.g., workerId) and non-nullable booleans.
            const enrichedData: AttendanceRecord[] = data.map((rec: any) => {
                const worker = workers.find(w => w.id === rec.worker_id);
                return {
@@ -168,9 +169,11 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         (payload) => {
             const updatedSession = payload.new as AttendanceSession;
             if (updatedSession.status === 'CLOSED') {
-                const sessionIdToRedirect = activeSession.id;
-                // No need to set state, component will unmount.
-                window.location.href = `/?page=Dashboard&manageId=${sessionIdToRedirect}`;
+                showToast('Sesi ditutup otomatis karena kuota penuh. Mengalihkan...', { type: 'info', title: 'Sesi Selesai' });
+                // Use a short delay to allow the toast to be seen
+                setTimeout(() => {
+                    window.location.href = `/?page=Dashboard&manageId=${updatedSession.id}`;
+                }, 1500);
             }
         }
       )
@@ -179,10 +182,11 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     return () => {
         supabase.removeChannel(channel);
     };
-  }, [activeSession?.id, workers]);
+  }, [activeSession?.id, workers, showToast]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!profile.company_id) return;
     setIsLoading(true);
     setError(null);
 
@@ -191,6 +195,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     
     const sessionData = {
       id: newSessionId,
+      company_id: profile.company_id,
       date: formData.get('sessionDate') as string,
       division: formData.get('division') as string,
       shiftTime: formData.get('shiftTime') as string,

@@ -7,19 +7,20 @@ import Database from './pages/Database';
 import OpenList from './pages/OpenList';
 import PublicAttendance from './pages/PublicAttendance';
 import Settings from './pages/Settings';
-import LoginPage from './pages/LoginPage';
-import WelcomePage from './pages/WelcomePage';
-import { Worker, AttendanceSession, AttendanceRecord } from './types';
+import AuthRouter from './pages/AuthRouter';
+import SuperAdminDashboard from './pages/SuperAdminDashboard';
+import EmployeeDashboard from './pages/EmployeeDashboard';
+import { Worker, AttendanceSession, AttendanceRecord, Profile } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
 import { ToastProvider } from './contexts/ToastContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
 
 export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
 
-const App: React.FC = () => {
-  const [session, setSession] = useState<any>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [showWelcome, setShowWelcome] = useState(true);
+const AppContent: React.FC = () => {
+  const { session, profile, loading: authLoading } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceSession[]>([]);
@@ -28,25 +29,7 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPublicMode, setIsPublicMode] = useState(false);
   
-  const workersRef = useRef<Worker[]>([]);
-  useEffect(() => {
-    workersRef.current = workers;
-  }, [workers]);
-  
   const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -63,147 +46,129 @@ const App: React.FC = () => {
         }
         if (manageId) {
             setAutoOpenSessionId(manageId);
-            // Hapus parameter dari URL setelah dibaca agar tidak memicu lagi saat refresh
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     }
   }, []);
 
-  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'id'> | null>(null);
+  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'id' | 'company_id'> | null>(null);
   const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
 
-  const fetchData = useCallback(async () => {
-    if (!session) return;
-    if (workers.length === 0) setLoading(true); 
+  const fetchData = useCallback(async (companyId: string) => {
+    if (!session || !companyId) return;
+    setLoading(true);
     setError(null);
 
     try {
-        const fetchAll = async (table: string, select: string) => {
-            let allData: any[] = [];
-            let lastData: any[] | null = null;
-            let page = 0;
-            const pageSize = 1000;
+      const { data: workersData, error: workersError } = await supabase.from('workers').select('*').eq('company_id', companyId);
+      if (workersError) throw workersError;
+      setWorkers(workersData || []);
+      
+      const { data: sessionsData, error: sessionsError } = await supabase.from('attendance_sessions').select('*').eq('company_id', companyId);
+      if (sessionsError) throw sessionsError;
+      
+      const sessionIds = (sessionsData || []).map(s => s.id);
+      let allRecordsData: any[] = [];
+      if (sessionIds.length > 0) {
+          const { data: recordsData, error: recordsError } = await supabase.from('attendance_records').select('*').in('session_id', sessionIds);
+          if (recordsError) throw recordsError;
+          allRecordsData = recordsData || [];
+      }
+      
+      const workerMap = new Map<string, Worker>();
+      (workersData || []).forEach(worker => {
+          if (worker.id) workerMap.set(worker.id, worker);
+      });
 
-            do {
-                const { data, error } = await supabase
-                    .from(table)
-                    .select(select)
-                    .range(page * pageSize, (page + 1) * pageSize - 1);
+      const recordsBySessionId = new Map<string, any[]>();
+      allRecordsData.forEach(record => {
+          if (!recordsBySessionId.has(record.session_id)) {
+              recordsBySessionId.set(record.session_id, []);
+          }
+          recordsBySessionId.get(record.session_id)!.push(record);
+      });
 
-                if (error) throw error;
-
-                if (data) {
-                    allData = [...allData, ...data];
-                    lastData = data;
-                } else {
-                    lastData = [];
-                }
-                page++;
-            } while (lastData && lastData.length === pageSize);
-            
-            return allData;
-        };
-
-        const workersData = await fetchAll('workers', '*');
-        const sessionsData = await fetchAll('attendance_sessions', '*');
-        const recordsData = await fetchAll('attendance_records', 'id, session_id, worker_id, timestamp, checkout_timestamp, manual_status, is_takeout, scan_timestamp, is_arrived');
-        
-        const typedWorkers: Worker[] = workersData.map(w => ({
-            ...w,
-            createdAt: w.createdAt || new Date().toISOString()
-        }));
-        setWorkers(typedWorkers);
-
-        const workerMap = new Map<string, Worker>();
-        typedWorkers.forEach(worker => {
-            if (worker.id) {
-                workerMap.set(worker.id, worker);
-            }
-        });
-
-        const recordsBySessionId = new Map<string, any[]>();
-        recordsData.forEach(record => {
-            if (!recordsBySessionId.has(record.session_id)) {
-                recordsBySessionId.set(record.session_id, []);
-            }
-            recordsBySessionId.get(record.session_id)!.push(record);
-        });
-
-        const history: AttendanceSession[] = sessionsData.map(session => {
-            const recordsForSession = recordsBySessionId.get(session.id) || [];
-            return {
-                id: session.id,
-                date: session.date,
-                division: session.division,
-                shiftTime: session.shiftTime,
-                shiftId: session.shiftId,
-                planMpp: session.planMpp,
-                status: session.status,
-                session_type: session.session_type,
-                records: recordsForSession.map((rec: any) => {
-                    const worker = workerMap.get(rec.worker_id);
-                    return {
-                        id: rec.id,
-                        workerId: rec.worker_id,
-                        opsId: worker?.opsId || 'N/A',
-                        fullName: worker?.fullName || 'Unknown',
-                        timestamp: rec.timestamp,
-                        scan_timestamp: rec.scan_timestamp,
-                        checkout_timestamp: rec.checkout_timestamp,
-                        manual_status: rec.manual_status,
-                        is_takeout: rec.is_takeout,
-                        is_arrived: rec.is_arrived ?? true,
-                    }
-                }),
-            };
-        });
-        setAttendanceHistory(history);
+      const history: AttendanceSession[] = (sessionsData || []).map(session => {
+          const recordsForSession = recordsBySessionId.get(session.id) || [];
+          return {
+              ...session,
+              records: recordsForSession.map((rec: any) => {
+                  const worker = workerMap.get(rec.worker_id);
+                  return {
+                      id: rec.id,
+                      workerId: rec.worker_id,
+                      opsId: worker?.opsId || 'N/A',
+                      fullName: worker?.fullName || 'Unknown',
+                      timestamp: rec.timestamp,
+                      scan_timestamp: rec.scan_timestamp,
+                      checkout_timestamp: rec.checkout_timestamp,
+                      manual_status: rec.manual_status,
+                      is_takeout: rec.is_takeout,
+                      is_arrived: rec.is_arrived ?? true,
+                  }
+              }),
+          };
+      });
+      setAttendanceHistory(history);
 
     } catch (err: any) {
       console.error("Fetch Data Error:", err);
-      let errMsg = err?.message || "An unexpected error occurred.";
-      setError(errMsg);
+      setError(err?.message || "An unexpected error occurred.");
     } finally {
       setLoading(false);
     }
-  }, [session, workers.length]); 
+  }, [session]); 
 
   useEffect(() => {
-    if (!isPublicMode && session) {
-        fetchData();
+    if (!isPublicMode && session && profile?.role === 'company_admin' && profile.company_id) {
+        fetchData(profile.company_id);
     } else {
         setLoading(false); 
     }
-  }, [isPublicMode, session, fetchData]); 
+  }, [isPublicMode, session, profile, fetchData]); 
 
-  // Fungsi untuk membersihkan state auto-open setelah digunakan
-  const clearAutoOpenSessionId = () => {
-    setAutoOpenSessionId(null);
-  };
+  const clearAutoOpenSessionId = () => setAutoOpenSessionId(null);
 
   if (isPublicMode) {
       return <PublicAttendance />;
   }
 
   if (authLoading) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-[#050a18]">
-          <div className="flex flex-col items-center">
-             <div className="animate-pulse mb-6">
-                 <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-20 w-20 object-contain" />
-             </div>
-             <div className="text-blue-500 text-[10px] font-black tracking-[0.5em] uppercase">Initializing ABSENIN</div>
-          </div>
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#050a18]">
+        <div className="flex flex-col items-center">
+           <div className="animate-pulse mb-6">
+               <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-20 w-20 object-contain" />
+           </div>
+           <div className="text-blue-500 text-[10px] font-black tracking-[0.5em] uppercase">Initializing ABSENIN</div>
         </div>
-      );
+      </div>
+    );
   }
 
-  if (!session && showWelcome) {
-    return <WelcomePage onEnter={() => setShowWelcome(false)} />;
+  if (!session || !profile) {
+    // AuthRouter will handle showing WelcomePage or LoginPage
+    return <AuthRouter><></></AuthRouter>;
+  }
+  
+  // ROLE-BASED ROUTING
+  if (profile.role === 'super_admin') {
+    return <SuperAdminDashboard profile={profile} />;
   }
 
-  if (!session) {
-    return <LoginPage />;
+  if (profile.role === 'employee') {
+    return <EmployeeDashboard profile={profile} />;
+  }
+
+  // Default to Company Admin
+  if (profile.role !== 'company_admin' || !profile.company_id) {
+    return (
+        <AuthRouter>
+            <div className="min-h-screen flex items-center justify-center">
+                <p className="text-red-500">Error: Profil pengguna tidak valid atau tidak memiliki perusahaan terkait.</p>
+            </div>
+        </AuthRouter>
+    );
   }
 
   const renderPage = () => {
@@ -220,36 +185,41 @@ const App: React.FC = () => {
       );
     }
     
+    const companyId = profile.company_id!;
+
     switch (currentPage) {
       case 'Dashboard':
         return <Dashboard 
+                  profile={profile}
                   workers={workers} 
                   attendanceHistory={attendanceHistory} 
-                  refreshData={fetchData} 
+                  refreshData={() => fetchData(companyId)} 
                   setAttendanceHistory={setAttendanceHistory}
                   autoOpenSessionId={autoOpenSessionId}
                   clearAutoOpenSessionId={clearAutoOpenSessionId}
                />;
       case 'Absensi':
         return <Attendance 
+                  profile={profile}
                   workers={workers} 
-                  refreshData={fetchData}
+                  refreshData={() => fetchData(companyId)}
                   activeSession={activeSession}
                   setActiveSession={setActiveSession}
                   activeRecords={activeRecords}
                   setActiveRecords={setActiveRecords}
                />;
       case 'Open List':
-          return <OpenList workers={workers} />;
+          return <OpenList profile={profile} workers={workers} />;
       case 'Data Base':
-        return <Database workers={workers} setWorkers={setWorkers} />;
+        return <Database profile={profile} workers={workers} setWorkers={setWorkers} />;
       case 'Pengaturan':
-          return <Settings />;
+          return <Settings profile={profile} />;
       default:
         return <Dashboard 
+                  profile={profile}
                   workers={workers} 
                   attendanceHistory={attendanceHistory} 
-                  refreshData={fetchData} 
+                  refreshData={() => fetchData(companyId)} 
                   setAttendanceHistory={setAttendanceHistory} 
                   autoOpenSessionId={autoOpenSessionId}
                   clearAutoOpenSessionId={clearAutoOpenSessionId}
@@ -258,34 +228,41 @@ const App: React.FC = () => {
   };
 
   return (
-    <ToastProvider>
-        <div className="flex min-h-screen bg-[#f8f9fc] text-gray-800 font-sans">
-        <Sidebar 
-            currentPage={currentPage} 
-            setCurrentPage={setCurrentPage} 
-            isOpen={isSidebarOpen}
-            onClose={() => setIsSidebarOpen(false)}
-        />
-        <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
-            <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
-            <div className="flex items-center gap-3">
-                <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-8 w-8 object-contain" />
-                <div>
-                    <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENIN</h1>
-                    <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Attendance Portal</p>
-                </div>
+    <div className="flex min-h-screen bg-[#f8f9fc] text-gray-800 font-sans">
+    <Sidebar 
+        profile={profile}
+        currentPage={currentPage} 
+        setCurrentPage={setCurrentPage} 
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+    />
+    <main className="flex-1 flex flex-col min-h-screen overflow-hidden transition-all duration-300">
+        <div className="lg:hidden p-4 flex justify-between items-center bg-white border-b shrink-0">
+        <div className="flex items-center gap-3">
+            <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-8 w-8 object-contain" />
+            <div>
+                <h1 className="text-sm font-black text-blue-600 leading-none tracking-tighter">ABSENIN</h1>
+                <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest mt-0.5">Attendance Portal</p>
             </div>
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
-                <HamburgerIcon />
-            </button>
-            </div>
-            <div className="flex-1 p-4 sm:p-6 lg:p-10 overflow-y-auto no-scrollbar">
-                {renderPage()}
-            </div>
-        </main>
         </div>
-    </ToastProvider>
+        <button onClick={() => setIsSidebarOpen(true)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors">
+            <HamburgerIcon />
+        </button>
+        </div>
+        <div className="flex-1 p-4 sm:p-6 lg:p-10 overflow-y-auto no-scrollbar">
+            {renderPage()}
+        </div>
+    </main>
+    </div>
   );
 };
+
+const App: React.FC = () => (
+  <ToastProvider>
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  </ToastProvider>
+);
 
 export default App;

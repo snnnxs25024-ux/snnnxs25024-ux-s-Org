@@ -58,7 +58,6 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as AttendanceSession;
                 if (newSession.status === 'CLOSED') {
-                    // FIX: Prevent race condition. Only set to 'closed' if not already showing a success message.
                     if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
                         setStatus('closed');
                     }
@@ -93,6 +92,12 @@ const PublicAttendance: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!session || !opsId) return;
+
+      if (status === 'locked') {
+        setMessage('Perangkat ini sudah digunakan untuk absen pada sesi ini.');
+        setStatus('error');
+        return;
+      }
       
       if (session.status === 'CLOSED' || status === 'closed') {
           setStatus('closed');
@@ -103,70 +108,32 @@ const PublicAttendance: React.FC = () => {
 
       const worker = workers.find(w => w.opsId.toLowerCase() === opsId.trim().toLowerCase());
       
-      if(!worker) {
+      if(!worker || !worker.id) {
           setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");
           setStatus('error');
           return;
       }
 
-      const { data: existingDaily, error: checkError } = await supabase
-        .from('attendance_records')
-        .select('id, attendance_sessions!inner(date)')
-        .eq('worker_id', worker.id)
-        .eq('attendance_sessions.date', session.date);
-      
-      if (checkError) {
-          setMessage("Gagal memvalidasi data. Coba lagi.");
-          setStatus('error');
-          return;
-      }
-
-      if(existingDaily && existingDaily.length > 0) {
-          setMessage(`OpsID ini sudah absen pada tanggal ${session.date} (Max 1x per hari).`);
-          setStatus('error');
-          return;
-      }
-
-      // Hitung jumlah pendaftar saat ini (sebelum entri baru)
-      const { count } = await supabase
-        .from('attendance_records')
-        .select('id', { count: 'exact', head: true })
-        .eq('session_id', session.id);
-      
-      const currentCount = count || 0;
-      let manualStatus = null;
-      let resultStatus: 'success' | 'buffer' = 'success';
-
-      // Logika Buffer
-      if (currentCount >= session.planMpp) {
-          manualStatus = 'Buffer';
-          resultStatus = 'buffer';
-      }
-
-      const shiftStartTime = session.shiftTime.split(' - ')[0];
-      const officialTimestamp = new Date(session.date + 'T' + shiftStartTime).toISOString();
-      
-      const { error } = await supabase.from('attendance_records').insert({
-          session_id: session.id,
-          worker_id: worker.id,
-          timestamp: officialTimestamp,
-          scan_timestamp: new Date().toISOString(),
-          manual_status: manualStatus,
-          is_arrived: false 
+      // --- NEW LOGIC: Call the RPC function to prevent race conditions ---
+      const { data, error: rpcError } = await supabase.rpc('register_attendance_safe', {
+          p_session_id: session.id,
+          p_worker_id: worker.id
       });
 
-      if(error) {
-          setMessage("Gagal menyimpan data. Coba lagi.");
+      if (rpcError) {
+          console.error("RPC Error:", rpcError);
+          setMessage(`Terjadi kesalahan pada server: ${rpcError.message}. Hubungi administrator.`);
+          setStatus('error');
+          return;
+      }
+
+      const result = data as { status: 'error' | 'success' | 'buffer', message: string };
+      
+      if (result.status === 'error') {
+          setMessage(result.message);
           setStatus('error');
       } else {
-          // LOGIKA AUTO CLOSE: Cek apakah fitur aktif DAN kuota terpenuhi setelah entri ini
-          const newTotalCount = currentCount + 1;
-          if (session.auto_close && newTotalCount >= session.planMpp) {
-              await supabase.from('attendance_sessions')
-                .update({ status: 'CLOSED' })
-                .eq('id', session.id);
-          }
-
+          // Handle success or buffer
           if (sessionId) {
               localStorage.setItem(`absenin_attended_${sessionId}`, 'true');
           }
@@ -175,7 +142,9 @@ const PublicAttendance: React.FC = () => {
               name: worker.fullName,
               time: new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})
           });
-          setStatus(resultStatus);
+          
+          // The RPC returns 'buffer' for buffer entries, 'success' for on-plan entries
+          setStatus(result.status);
       }
   };
 

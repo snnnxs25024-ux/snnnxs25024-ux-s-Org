@@ -9,21 +9,26 @@ const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=2000&auto=format&fit=crop'; 
 
 const LoginPage: React.FC = () => {
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   // Load email jika "Ingat Saya" pernah dicentang sebelumnya
   useEffect(() => {
-    const savedEmail = localStorage.getItem('absenin_remember_email');
-    if (savedEmail) {
-      setEmail(savedEmail);
-      setRememberMe(true);
+    if (authMode === 'login') {
+      const savedEmail = localStorage.getItem('absenin_remember_email');
+      if (savedEmail) {
+        setEmail(savedEmail);
+        setRememberMe(true);
+      }
     }
-  }, []);
+  }, [authMode]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,12 +44,41 @@ const LoginPage: React.FC = () => {
       setError(error.message === 'Invalid login credentials' ? 'Email atau Password salah.' : error.message);
       setLoading(false);
     } else {
-      // Jika login berhasil dan "Ingat Saya" dicentang, simpan email
       if (rememberMe) {
         localStorage.setItem('absenin_remember_email', email);
       } else {
         localStorage.removeItem('absenin_remember_email');
       }
+    }
+  };
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError(null);
+    setSignUpSuccess(false);
+
+    // Proses pendaftaran disederhanakan.
+    // Cukup panggil supabase.auth.signUp.
+    // Trigger di database akan secara otomatis menangani pembuatan profil dan perusahaan.
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        // Kirim nama lengkap sebagai metadata, agar bisa diambil oleh trigger di database.
+        data: {
+          full_name: fullName,
+        }
+      }
+    });
+
+    setLoading(false);
+    
+    if (signUpError) {
+      setError(signUpError.message);
+    } else if (data.user) {
+      // Jika pendaftaran berhasil (bahkan jika perlu verifikasi email), tampilkan pesan sukses.
+      setSignUpSuccess(true);
     }
   };
 
@@ -58,31 +92,50 @@ const LoginPage: React.FC = () => {
       setError(error.message);
       setLoading(false);
     }
-    // The page will redirect on success, so no need to set loading to false here.
   };
+
+  const toggleMode = () => {
+    setAuthMode(prev => prev === 'login' ? 'signup' : 'login');
+    setError(null);
+    setSignUpSuccess(false);
+    setPassword('');
+  };
+
+  if (signUpSuccess) {
+    return (
+      <div className="min-h-screen w-full flex bg-white font-sans items-center justify-center p-4">
+        <div className="w-full max-w-md text-center bg-green-50 p-10 rounded-2xl border border-green-200">
+           <div className="w-20 h-20 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-6">
+              <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          </div>
+          <h1 className="text-2xl font-black text-green-800 mb-2 uppercase tracking-tight">Pendaftaran Berhasil!</h1>
+          <p className="text-gray-600 font-bold text-sm uppercase leading-relaxed">
+              Satu langkah terakhir: Silakan periksa email Anda di <strong className="text-green-700">{email}</strong> untuk link verifikasi akun.
+          </p>
+          <button onClick={() => setSignUpSuccess(false)} className="mt-8 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] hover:text-blue-600">
+            Kembali ke Login
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
-      
-      {/* LEFT: Hero Warehouse Section */}
       <div className="hidden lg:flex lg:w-3/5 relative bg-[#020617] flex-col items-center justify-center p-16">
         <div className="absolute inset-0 overflow-hidden">
-          {/* Ambient Glows */}
           <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-blue-600/20 rounded-full blur-[120px]"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-indigo-600/10 rounded-full blur-[120px]"></div>
-          
           <div className="absolute inset-0 z-0">
             <img 
               src={HERO_IMAGE} 
               alt="Modern Warehouse Logistics" 
               className="w-full h-full object-cover opacity-40 mix-blend-luminosity scale-105 animate-slow-zoom"
             />
-            {/* Cyber Grid Overlay */}
             <div className="absolute inset-0 opacity-[0.15] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#3b82f6 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }}></div>
             <div className="absolute inset-0 bg-gradient-to-r from-[#020617] via-[#020617]/50 to-transparent"></div>
           </div>
         </div>
-        
         <div className="relative z-10 w-full max-w-2xl text-center lg:text-left">
           <div className="inline-block px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black tracking-[0.4em] uppercase mb-8 backdrop-blur-md">
             Logistics Infrastructure
@@ -93,7 +146,6 @@ const LoginPage: React.FC = () => {
           <p className="text-blue-100/40 text-lg font-medium max-w-lg mt-8 leading-relaxed">
             Sistem manajemen absensi tercanggih bernama <span className="text-blue-400 font-bold">"ABSENIN"</span>, yang berguna untuk pantau kehadiran Daily Worker di ekosistem pergudangan.
           </p>
-
           <div className="mt-12 flex gap-10">
             <div className="flex flex-col">
               <span className="text-white font-black text-3xl">99.9%</span>
@@ -106,7 +158,6 @@ const LoginPage: React.FC = () => {
             </div>
           </div>
         </div>
-
         <div className="absolute bottom-12 left-16 flex items-center gap-4 z-20">
           <div className="w-12 h-12 p-2 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl">
             <img src={LOGO_URL} alt="Mini Logo" className="w-full h-full object-contain" />
@@ -118,7 +169,6 @@ const LoginPage: React.FC = () => {
         </div>
       </div>
 
-      {/* RIGHT: Login Form Section */}
       <div className="w-full lg:w-2/5 flex items-center justify-center p-8 sm:p-20 bg-white relative">
         <div className="w-full max-w-md">
           <div className="mb-12 text-center lg:text-left">
@@ -130,11 +180,29 @@ const LoginPage: React.FC = () => {
                 </div>
               </div>
             </div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tighter">Selamat Datang</h1>
-            <p className="text-gray-500 font-medium mt-3 text-lg leading-relaxed">Silakan masuk menggunakan kredensial administrator Anda.</p>
+            <h1 className="text-4xl font-black text-gray-900 tracking-tighter">{authMode === 'login' ? 'Selamat Datang' : 'Buat Akun Baru'}</h1>
+            <p className="text-gray-500 font-medium mt-3 text-lg leading-relaxed">{authMode === 'login' ? 'Silakan masuk menggunakan kredensial administrator Anda.' : 'Isi data berikut untuk mendaftar sebagai admin.'}</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
+          <form onSubmit={authMode === 'login' ? handleLogin : handleSignUp} className="space-y-6">
+            {authMode === 'signup' && (
+               <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Nama Lengkap</label>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                  </div>
+                  <input 
+                    type="text" 
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-sm font-semibold" 
+                    placeholder="Contoh: John Doe"
+                    required
+                  />
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Email Administrator</label>
               <div className="relative group">
@@ -155,7 +223,7 @@ const LoginPage: React.FC = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Kata Sandi</label>
-                <a href="#" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Lupa Sandi?</a>
+                {authMode === 'login' && <a href="#" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Lupa Sandi?</a>}
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
@@ -188,24 +256,26 @@ const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-1">
-              <label className="flex items-center group cursor-pointer">
-                <div className="relative">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only" 
-                    checked={rememberMe}
-                    onChange={() => setRememberMe(!rememberMe)}
-                  />
-                  <div className={`w-5 h-5 border-2 rounded-md transition-all flex items-center justify-center ${rememberMe ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200' : 'bg-gray-50 border-gray-200 group-hover:border-blue-400'}`}>
-                    {rememberMe && (
-                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    )}
+            {authMode === 'login' && (
+              <div className="flex items-center justify-between px-1">
+                <label className="flex items-center group cursor-pointer">
+                  <div className="relative">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only" 
+                      checked={rememberMe}
+                      onChange={() => setRememberMe(!rememberMe)}
+                    />
+                    <div className={`w-5 h-5 border-2 rounded-md transition-all flex items-center justify-center ${rememberMe ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200' : 'bg-gray-50 border-gray-200 group-hover:border-blue-400'}`}>
+                      {rememberMe && (
+                        <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <span className="ml-3 text-[11px] font-black text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">Ingat Saya</span>
-              </label>
-            </div>
+                  <span className="ml-3 text-[11px] font-black text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">Ingat Saya</span>
+                </label>
+              </div>
+            )}
 
             {error && (
               <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-xs rounded-2xl flex items-center gap-3 animate-shake">
@@ -224,9 +294,9 @@ const LoginPage: React.FC = () => {
               {loading ? (
                 <div className="flex items-center justify-center gap-3">
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Autentikasi...</span>
+                  <span>Memproses...</span>
                 </div>
-              ) : 'Masuk Ke Dashboard'}
+              ) : (authMode === 'login' ? 'Masuk Ke Dashboard' : 'Daftar Akun Baru')}
             </button>
           </form>
 
@@ -243,8 +313,17 @@ const LoginPage: React.FC = () => {
               className="w-full flex items-center justify-center gap-3 py-4 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-gray-400 transition-all text-sm font-bold text-gray-700 disabled:opacity-70 disabled:cursor-not-allowed"
           >
               <GoogleIcon />
-              <span>Masuk dengan Google</span>
+              <span>{authMode === 'login' ? 'Masuk' : 'Daftar'} dengan Google</span>
           </button>
+           
+          <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500">
+              {authMode === 'login' ? 'Belum punya akun?' : 'Sudah punya akun?'}
+              <button onClick={toggleMode} className="ml-2 font-bold text-blue-600 hover:underline">
+                {authMode === 'login' ? 'Daftar di sini' : 'Masuk sekarang'}
+              </button>
+            </p>
+          </div>
 
           <div className="mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest">
