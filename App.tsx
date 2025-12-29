@@ -36,13 +36,11 @@ const App: React.FC = () => {
   const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setAuthLoading(false);
-    });
-
+    // This listener will fire immediately with the initial session state,
+    // and then again whenever the session changes. This is more robust.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      setAuthLoading(false); // Set loading to false once we have the auth state.
     });
 
     return () => subscription.unsubscribe();
