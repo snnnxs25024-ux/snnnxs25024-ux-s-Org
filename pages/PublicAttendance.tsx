@@ -59,7 +59,20 @@ const PublicAttendance: React.FC = () => {
         }
 
         const { data: workerData } = await supabase.from('workers').select('*').eq('status', 'Active');
-        if(workerData) setWorkers(workerData);
+        if (workerData) {
+            const typedWorkers: Worker[] = workerData.map((w: any) => ({
+                id: w.id,
+                opsId: w.ops_id,
+                fullName: w.full_name,
+                nik: w.nik,
+                phone: w.phone,
+                contractType: w.contract_type,
+                department: w.department,
+                createdAt: w.created_at || new Date().toISOString(),
+                status: w.status,
+            }));
+            setWorkers(typedWorkers);
+        }
 
         setDataLoading(false);
     };
@@ -90,8 +103,8 @@ const PublicAttendance: React.FC = () => {
       setOpsId(text);
       if(text.length > 1) {
           const filtered = workers.filter(w => 
-              w.opsId.toLowerCase().includes(text.toLowerCase()) || 
-              w.fullName.toLowerCase().includes(text.toLowerCase())
+              (w.opsId && w.opsId.toLowerCase().includes(text.toLowerCase())) || 
+              (w.fullName && w.fullName.toLowerCase().includes(text.toLowerCase()))
           ).slice(0, 5);
           setSuggestions(filtered);
       } else {
@@ -116,7 +129,7 @@ const PublicAttendance: React.FC = () => {
       
       setStatus('loading');
 
-      const worker = workers.find(w => w.opsId.toLowerCase() === opsId.trim().toLowerCase());
+      const worker = workers.find(w => w.opsId && w.opsId.toLowerCase() === opsId.trim().toLowerCase());
       
       if(!worker) {
           setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");
