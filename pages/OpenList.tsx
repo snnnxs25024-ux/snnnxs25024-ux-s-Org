@@ -7,6 +7,7 @@ import CopyIcon from '../components/icons/CopyIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
+import { playSound } from '../utils/sound';
 
 interface OpenListProps {
   workers: Worker[];
@@ -130,6 +131,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         { event: '*', schema: 'public', table: 'attendance_records', filter: `session_id=eq.${activeSession.id}` },
         async (payload) => {
             if (payload.eventType === 'INSERT') {
+                 playSound('scan-success');
                  const newRecord = payload.new as any;
                  const worker = workers.find(w => w.id === newRecord.worker_id);
                  const enriched: AttendanceRecord = {

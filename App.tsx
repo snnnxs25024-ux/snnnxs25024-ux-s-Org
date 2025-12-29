@@ -193,12 +193,9 @@ const App: React.FC = () => {
 
   if (authLoading) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[#050a18]">
-          <div className="flex flex-col items-center">
-             <div className="animate-pulse mb-6">
-                 <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-20 w-20 object-contain" />
-             </div>
-             <div className="text-blue-500 text-[10px] font-black tracking-[0.5em] uppercase">Initializing ABSENIN</div>
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <div className="animate-pulse">
+             <img src="https://i.imgur.com/lie9EMX.png" alt="ABSENIN Logo" className="h-24 w-24 object-contain" />
           </div>
         </div>
       );

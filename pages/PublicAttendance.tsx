@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { AttendanceSession, Worker } from '../types';
+import { playSound } from '../utils/sound';
 
 const PublicAttendance: React.FC = () => {
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -196,6 +197,7 @@ const PublicAttendance: React.FC = () => {
               localStorage.setItem(`absenin_attended_${sessionId}`, 'true');
           }
           
+          playSound('scan-success');
           setSubmittedData({
               name: worker.fullName,
               time: new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})

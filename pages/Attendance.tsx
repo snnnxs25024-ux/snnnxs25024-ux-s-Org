@@ -6,6 +6,7 @@ import { Worker, AttendanceSession, AttendanceRecord } from '../types';
 import { supabase } from '../lib/supabaseClient';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import { useToast } from '../hooks/useToast';
+import { playSound } from '../utils/sound';
 
 interface AttendanceProps {
   workers: Worker[];
@@ -150,7 +151,10 @@ const Attendance: React.FC<AttendanceProps> = ({
       }
 
       // VALIDATION: Check if worker's department matches the session's division
-      if (worker.department !== activeSession.division) {
+      const { data: divisions } = await supabase.from('master_data').select('value').eq('category', 'DIVISION');
+      const divisionList = divisions?.map(d => d.value) || divisionOpts;
+
+      if (divisionList.includes(activeSession.division) && worker.department !== activeSession.division) {
           setError(`Worker ${worker.fullName} (Dept: ${worker.department}) tidak diizinkan untuk sesi Divisi ${activeSession.division}.`);
           setOpsIdInput('');
           return;
@@ -202,6 +206,7 @@ const Attendance: React.FC<AttendanceProps> = ({
           is_arrived: true // Auto-confirm presence for Admin Scans
       };
       
+      playSound('scan-success');
       setActiveRecords(prev => [newRecord, ...prev]);
       setError(null);
       setOpsIdInput('');

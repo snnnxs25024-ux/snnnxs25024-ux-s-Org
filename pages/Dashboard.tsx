@@ -322,7 +322,18 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 const sessionDate = new Date(session.date + 'T00:00:00');
                 return sessionDate.getMonth() === currentMonth && sessionDate.getFullYear() === currentYear;
             })
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            .sort((a, b) => {
+                // Primary sort: Date descending (newest first)
+                const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
+                if (dateComparison !== 0) {
+                    return dateComparison;
+                }
+                
+                // Secondary sort: Shift time ascending (00:00, 03:00, etc.)
+                const startTimeA = a.shiftTime.split(' - ')[0];
+                const startTimeB = b.shiftTime.split(' - ')[0];
+                return startTimeA.localeCompare(startTimeB);
+            });
     }, [attendanceHistory]);
 
     const downloadReport = (format: 'xlsx' | 'pdf') => {

@@ -9,6 +9,9 @@ import UploadIcon from '../components/icons/UploadIcon';
 import DownloadIcon from '../components/icons/DownloadIcon';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
+import useLocalStorage from '../hooks/useLocalStorage';
+import SoundOnIcon from '../components/icons/SoundOnIcon';
+import SoundOffIcon from '../components/icons/SoundOffIcon';
 
 const Settings: React.FC = () => {
     const [divisions, setDivisions] = useState<MasterData[]>([]);
@@ -22,6 +25,7 @@ const Settings: React.FC = () => {
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { showToast } = useToast();
+    const [isSoundEnabled, setIsSoundEnabled] = useLocalStorage('isSoundEnabled', true);
 
     useEffect(() => {
         fetchMasterData();
@@ -137,7 +141,6 @@ const Settings: React.FC = () => {
                     return;
                 }
 
-                // Get current list to check duplicates locally first
                 const currentList = activeTab === 'DIVISION' ? divisions 
                                   : activeTab === 'SHIFT_TIME' ? shiftTimes 
                                   : shiftIds;
@@ -152,7 +155,6 @@ const Settings: React.FC = () => {
                         value: val
                     }));
 
-                // Remove duplicates within the import file itself
                 const uniqueToInsert = toInsert.filter((v, i, a) => a.findIndex(t => t.value.toLowerCase() === v.value.toLowerCase()) === i);
 
                 if (uniqueToInsert.length === 0) {
@@ -164,7 +166,6 @@ const Settings: React.FC = () => {
                     
                     if (insertedData) {
                         showToast(`Berhasil mengimpor ${insertedData.length} data baru.`, { type: 'success', title: 'Impor Sukses' });
-                        // Refresh data manually to ensure sync
                         fetchMasterData();
                     }
                 }
@@ -204,11 +205,38 @@ const Settings: React.FC = () => {
 
     return (
         <div className="space-y-6 max-w-4xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800">Pengaturan Master Data</h1>
-            <p className="text-gray-500">Kelola daftar pilihan Divisi, Jam Shift, dan Shift ID agar muncul di menu Absensi.</p>
+            <h1 className="text-3xl font-bold text-gray-800">Pengaturan</h1>
+            
+            <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6">
+                <h2 className="text-lg font-bold text-gray-800 mb-1">Pengaturan Aplikasi</h2>
+                <p className="text-sm text-gray-500 mb-4">Ubah preferensi umum aplikasi.</p>
+                <div className="border-t border-gray-100 pt-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            {isSoundEnabled ? <SoundOnIcon className="text-blue-500" /> : <SoundOffIcon className="text-gray-400" />}
+                            <div>
+                                <h3 className="font-bold text-gray-700">Efek Suara</h3>
+                                <p className="text-xs text-gray-500">Aktifkan suara notifikasi saat absensi berhasil.</p>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={isSoundEnabled}
+                                onChange={(e) => setIsSoundEnabled(e.target.checked)}
+                                className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                </div>
+            </div>
 
             <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-                {/* Blue Tab Header Container */}
+                <div className="p-6 border-b">
+                    <h2 className="text-lg font-bold text-gray-800 mb-1">Pengaturan Master Data</h2>
+                    <p className="text-sm text-gray-500">Kelola daftar pilihan Divisi, Jam Shift, dan Shift ID agar muncul di menu Absensi.</p>
+                </div>
                 <div className="bg-blue-600 p-1 flex gap-1 overflow-x-auto no-scrollbar">
                     <button 
                         onClick={() => setActiveTab('DIVISION')}
@@ -231,7 +259,6 @@ const Settings: React.FC = () => {
                 </div>
 
                 <div className="p-6">
-                    {/* Bulk Actions */}
                     <div className="flex flex-col sm:flex-row justify-end gap-2 mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
                         <button 
                             onClick={handleDownloadTemplate}
@@ -255,7 +282,6 @@ const Settings: React.FC = () => {
                         />
                     </div>
 
-                    {/* Add Form */}
                     <form onSubmit={handleAdd} className="flex gap-2 mb-6">
                         <input 
                             type="text" 
@@ -273,7 +299,6 @@ const Settings: React.FC = () => {
                         </button>
                     </form>
 
-                    {/* List Data */}
                     {loading ? (
                         <div className="text-center py-8 text-gray-500 animate-pulse">Memuat data...</div>
                     ) : (
