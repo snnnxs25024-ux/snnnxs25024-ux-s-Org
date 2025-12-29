@@ -439,26 +439,23 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <h1 className="text-3xl font-bold text-gray-800">Database Karyawan</h1>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
             <button 
                 onClick={() => openEditModal(null)} 
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all"
             >
                 <AddIcon /> <span className="hidden sm:inline">Add New</span>
             </button>
-            <button
-                onClick={handleDownloadTemplate}
-                className="flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all border border-gray-300"
-            >
-                <DownloadIcon /> <span className="hidden sm:inline">Download Template</span>
-            </button>
-            <button 
-                onClick={() => importFileRef.current?.click()}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all"
-            >
-                <UploadIcon /> <span className="hidden sm:inline">Import Excel</span>
-            </button>
-            <input type="file" ref={importFileRef} onChange={handleImport} accept=".xlsx, .xls" className="hidden" />
+            <div className="relative group">
+                <button className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
+                    <UploadIcon /> <span className="hidden sm:inline">Import</span>
+                </button>
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl border border-gray-200 hidden group-hover:flex flex-col z-10 p-2">
+                    <button onClick={handleDownloadTemplate} className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">Download Template</button>
+                    <button onClick={() => importFileRef.current?.click()} className="text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded">Select File</button>
+                </div>
+                <input type="file" ref={importFileRef} onChange={handleImport} accept=".xlsx, .xls" className="hidden" />
+            </div>
             <button onClick={handleExport} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
                 <DownloadIcon /> <span className="hidden sm:inline">Export</span>
             </button>

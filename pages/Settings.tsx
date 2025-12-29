@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient';
-import { MasterData, Profile } from '../types';
+import { MasterData } from '../types';
 import DeleteIcon from '../components/icons/DeleteIcon';
 import AddIcon from '../components/icons/AddIcon';
 import UploadIcon from '../components/icons/UploadIcon';
@@ -10,11 +10,7 @@ import DownloadIcon from '../components/icons/DownloadIcon';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
 
-interface SettingsProps {
-    profile: Profile;
-}
-
-const Settings: React.FC<SettingsProps> = ({ profile }) => {
+const Settings: React.FC = () => {
     const [divisions, setDivisions] = useState<MasterData[]>([]);
     const [shiftTimes, setShiftTimes] = useState<MasterData[]>([]);
     const [shiftIds, setShiftIds] = useState<MasterData[]>([]);
@@ -27,36 +23,33 @@ const Settings: React.FC<SettingsProps> = ({ profile }) => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { showToast } = useToast();
 
-    // FIX: Add useCallback to the function definition.
-    const fetchMasterData = useCallback(async () => {
-        if (!profile.company_id) return;
+    useEffect(() => {
+        fetchMasterData();
+    }, []);
+
+    const fetchMasterData = async () => {
         setLoading(true);
-        const { data, error } = await supabase.from('master_data').select('*').eq('company_id', profile.company_id).order('value', { ascending: true });
+        const { data, error } = await supabase.from('master_data').select('*').order('value', { ascending: true });
         if (data) {
             setDivisions(data.filter(d => d.category === 'DIVISION'));
             setShiftTimes(data.filter(d => d.category === 'SHIFT_TIME'));
             setShiftIds(data.filter(d => d.category === 'SHIFT_ID'));
         }
         if (error) {
-            console.error("Error fetching master data:", error);
+            console.error("Error fetching master data (Make sure table 'master_data' exists):", error);
             showToast('Gagal memuat master data.', { type: 'error', title: 'Error' });
         }
         setLoading(false);
-    }, [profile.company_id, showToast]);
-
-    useEffect(() => {
-        fetchMasterData();
-    }, [fetchMasterData]);
+    };
 
     const handleAdd = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newItemValue.trim() || !profile.company_id) return;
+        if (!newItemValue.trim()) return;
         
         setActionLoading(true);
         const { data, error } = await supabase.from('master_data').insert({
             category: activeTab,
-            value: newItemValue.trim(),
-            company_id: profile.company_id,
+            value: newItemValue.trim()
         }).select().single();
 
         if (error) {
@@ -126,7 +119,7 @@ const Settings: React.FC<SettingsProps> = ({ profile }) => {
 
     const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !profile.company_id) return;
+        if (!file) return;
 
         const reader = new FileReader();
         reader.onload = async (evt) => {
@@ -156,8 +149,7 @@ const Settings: React.FC<SettingsProps> = ({ profile }) => {
                     .filter(val => val !== '' && !existingValues.has(val.toLowerCase()))
                     .map(val => ({
                         category: activeTab,
-                        value: val,
-                        company_id: profile.company_id as string,
+                        value: val
                     }));
 
                 // Remove duplicates within the import file itself

@@ -33,7 +33,19 @@ const PublicAttendance: React.FC = () => {
     const fetchSession = async () => {
         const { data } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
         if(data) {
-            setSession(data);
+            const sessionData: AttendanceSession = {
+                id: data.id,
+                date: data.date,
+                division: data.division,
+                shiftTime: data.shift_time,
+                shiftId: data.shift_id,
+                planMpp: data.plan_mpp,
+                status: data.status,
+                session_type: data.session_type,
+                auto_close: data.auto_close,
+                records: []
+            };
+            setSession(sessionData);
             if (data.status === 'CLOSED') {
                 setStatus('closed');
             }
@@ -58,6 +70,7 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as AttendanceSession;
                 if (newSession.status === 'CLOSED') {
+                    // FIX: Prevent race condition. Only set to 'closed' if not already showing a success message.
                     if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
                         setStatus('closed');
                     }
@@ -92,12 +105,6 @@ const PublicAttendance: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
       if(!session || !opsId) return;
-
-      if (status === 'locked') {
-        setMessage('Perangkat ini sudah digunakan untuk absen pada sesi ini.');
-        setStatus('error');
-        return;
-      }
       
       if (session.status === 'CLOSED' || status === 'closed') {
           setStatus('closed');
@@ -108,32 +115,70 @@ const PublicAttendance: React.FC = () => {
 
       const worker = workers.find(w => w.opsId.toLowerCase() === opsId.trim().toLowerCase());
       
-      if(!worker || !worker.id) {
+      if(!worker) {
           setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");
           setStatus('error');
           return;
       }
 
-      // --- NEW LOGIC: Call the RPC function to prevent race conditions ---
-      const { data, error: rpcError } = await supabase.rpc('register_attendance_safe', {
-          p_session_id: session.id,
-          p_worker_id: worker.id
-      });
-
-      if (rpcError) {
-          console.error("RPC Error:", rpcError);
-          setMessage(`Terjadi kesalahan pada server: ${rpcError.message}. Hubungi administrator.`);
+      const { data: existingDaily, error: checkError } = await supabase
+        .from('attendance_records')
+        .select('id, attendance_sessions!inner(date)')
+        .eq('worker_id', worker.id)
+        .eq('attendance_sessions.date', session.date);
+      
+      if (checkError) {
+          setMessage("Gagal memvalidasi data. Coba lagi.");
           setStatus('error');
           return;
       }
 
-      const result = data as { status: 'error' | 'success' | 'buffer', message: string };
+      if(existingDaily && existingDaily.length > 0) {
+          setMessage(`OpsID ini sudah absen pada tanggal ${session.date} (Max 1x per hari).`);
+          setStatus('error');
+          return;
+      }
+
+      // Hitung jumlah pendaftar saat ini (sebelum entri baru)
+      const { count } = await supabase
+        .from('attendance_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id);
       
-      if (result.status === 'error') {
-          setMessage(result.message);
+      const currentCount = count || 0;
+      let manualStatus = null;
+      let resultStatus: 'success' | 'buffer' = 'success';
+
+      // Logika Buffer
+      if (currentCount >= session.planMpp) {
+          manualStatus = 'Buffer';
+          resultStatus = 'buffer';
+      }
+
+      const shiftStartTime = session.shiftTime.split(' - ')[0];
+      const officialTimestamp = new Date(session.date + 'T' + shiftStartTime).toISOString();
+      
+      const { error } = await supabase.from('attendance_records').insert({
+          session_id: session.id,
+          worker_id: worker.id,
+          timestamp: officialTimestamp,
+          scan_timestamp: new Date().toISOString(),
+          manual_status: manualStatus,
+          is_arrived: false 
+      });
+
+      if(error) {
+          setMessage("Gagal menyimpan data. Coba lagi.");
           setStatus('error');
       } else {
-          // Handle success or buffer
+          // LOGIKA AUTO CLOSE: Cek apakah fitur aktif DAN kuota terpenuhi setelah entri ini
+          const newTotalCount = currentCount + 1;
+          if (session.auto_close && newTotalCount >= session.planMpp) {
+              await supabase.from('attendance_sessions')
+                .update({ status: 'CLOSED' })
+                .eq('id', session.id);
+          }
+
           if (sessionId) {
               localStorage.setItem(`absenin_attended_${sessionId}`, 'true');
           }
@@ -142,9 +187,7 @@ const PublicAttendance: React.FC = () => {
               name: worker.fullName,
               time: new Date().toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})
           });
-          
-          // The RPC returns 'buffer' for buffer entries, 'success' for on-plan entries
-          setStatus(result.status);
+          setStatus(resultStatus);
       }
   };
 
@@ -256,7 +299,7 @@ const PublicAttendance: React.FC = () => {
                   <button 
                     type="submit" 
                     disabled={status === 'loading'}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-100 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-200 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                       {status === 'loading' ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
