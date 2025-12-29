@@ -176,9 +176,11 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${activeSession.id}` },
         (payload) => {
             const updatedSession = payload.new as any;
-            if (updatedSession.status === 'CLOSED') {
-                const sessionIdToRedirect = activeSession.id;
-                window.location.href = `/?page=Dashboard&manageId=${sessionIdToRedirect}`;
+            // Only act if the session we are listening to is closed.
+            if (updatedSession.status === 'CLOSED' && activeSession && updatedSession.id === activeSession.id) {
+                 showToast('Sesi ditutup otomatis karena kuota penuh. Mengalihkan...', { type: 'info', title: 'Sesi Ditutup Otomatis' });
+                 // Redirect immediately to the dashboard to manage the now-closed session.
+                 window.location.href = `/?page=Dashboard&manageId=${updatedSession.id}`;
             }
         }
       )
@@ -241,18 +243,18 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const handleCloseSession = async () => {
       if (!activeSession) return;
       setIsCloseConfirmOpen(false);
-      const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', activeSession.id);
+      const sessionId = activeSession.id; // Store ID before any async operation
+      const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', sessionId);
+      
       if (error) {
           showToast("Gagal menutup sesi: " + error.message, { type: 'error', title: 'Error' });
           return;
       }
+      
       showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
-      const sessionId = activeSession.id;
-      setActiveSession(null);
-      setLiveRecords([]);
-      setTimeout(() => {
-        window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
-      }, 1500);
+      
+      // Redirect immediately. The page reload will reset state naturally.
+      window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
   };
 
   const getPublicLink = () => {

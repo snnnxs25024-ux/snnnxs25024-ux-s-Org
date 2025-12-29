@@ -12,8 +12,10 @@ const PublicAttendance: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'buffer' | 'error' | 'closed' | 'locked'>('idle');
   const [message, setMessage] = useState('');
   const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
+  const [dataLoading, setDataLoading] = useState(true);
 
   const statusRef = useRef(status);
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -27,41 +29,42 @@ const PublicAttendance: React.FC = () => {
     const lockKey = `absenin_attended_${id}`;
     if (localStorage.getItem(lockKey)) {
         setStatus('locked');
+        setDataLoading(false);
         return;
     }
-
-    const fetchSession = async () => {
-        const { data } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
-        if(data) {
-            const sessionData: AttendanceSession = {
-                id: data.id,
-                date: data.date,
-                division: data.division,
-                shiftTime: data.shift_time,
-                shiftId: data.shift_id,
-                planMpp: data.plan_mpp,
-                status: data.status,
-                session_type: data.session_type,
-                auto_close: data.auto_close,
+    
+    const fetchData = async () => {
+        setDataLoading(true);
+        const { data: sessionData } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
+        if(sessionData) {
+            const sessionState: AttendanceSession = {
+                id: sessionData.id,
+                date: sessionData.date,
+                division: sessionData.division,
+                shiftTime: sessionData.shift_time,
+                shiftId: sessionData.shift_id,
+                planMpp: sessionData.plan_mpp,
+                status: sessionData.status,
+                session_type: sessionData.session_type,
+                auto_close: sessionData.auto_close,
                 records: []
             };
-            setSession(sessionData);
-            if (data.status === 'CLOSED') {
+            setSession(sessionState);
+            if (sessionData.status === 'CLOSED') {
                 setStatus('closed');
             }
         } else {
             setStatus('error');
             setMessage('Sesi tidak ditemukan.');
         }
-    };
-    
-    const fetchWorkers = async () => {
-        const { data } = await supabase.from('workers').select('*').eq('status', 'Active');
-        if(data) setWorkers(data);
+
+        const { data: workerData } = await supabase.from('workers').select('*').eq('status', 'Active');
+        if(workerData) setWorkers(workerData);
+
+        setDataLoading(false);
     };
 
-    fetchSession();
-    fetchWorkers();
+    fetchData();
 
     const channel = supabase.channel(`public_session_${id}`)
         .on(
@@ -70,7 +73,6 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as AttendanceSession;
                 if (newSession.status === 'CLOSED') {
-                    // FIX: Prevent race condition. Only set to 'closed' if not already showing a success message.
                     if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
                         setStatus('closed');
                     }
@@ -100,11 +102,12 @@ const PublicAttendance: React.FC = () => {
   const selectWorker = (w: Worker) => {
       setOpsId(w.opsId);
       setSuggestions([]);
+      inputRef.current?.focus();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if(!session || !opsId) return;
+      if(!session || !opsId || dataLoading) return;
       
       if (session.status === 'CLOSED' || status === 'closed') {
           setStatus('closed');
@@ -139,7 +142,6 @@ const PublicAttendance: React.FC = () => {
           return;
       }
 
-      // Hitung jumlah pendaftar saat ini (sebelum entri baru)
       const { count } = await supabase
         .from('attendance_records')
         .select('id', { count: 'exact', head: true })
@@ -149,7 +151,6 @@ const PublicAttendance: React.FC = () => {
       let manualStatus = null;
       let resultStatus: 'success' | 'buffer' = 'success';
 
-      // Logika Buffer
       if (currentCount >= session.planMpp) {
           manualStatus = 'Buffer';
           resultStatus = 'buffer';
@@ -171,7 +172,6 @@ const PublicAttendance: React.FC = () => {
           setMessage("Gagal menyimpan data. Coba lagi.");
           setStatus('error');
       } else {
-          // LOGIKA AUTO CLOSE: Cek apakah fitur aktif DAN kuota terpenuhi setelah entri ini
           const newTotalCount = currentCount + 1;
           if (session.auto_close && newTotalCount >= session.planMpp) {
               await supabase.from('attendance_sessions')
@@ -223,7 +223,7 @@ const PublicAttendance: React.FC = () => {
       );
   }
 
-  if(!session) {
+  if(!session || dataLoading) {
       if(status === 'error') return <div className="p-8 text-center text-red-600 mt-10 font-bold uppercase tracking-widest text-xs">Error: {message}</div>;
       return <div className="p-12 text-center text-gray-600 mt-10 animate-pulse font-black uppercase tracking-[0.3em] text-[10px]">Initializing Session...</div>;
   }
@@ -269,13 +269,15 @@ const PublicAttendance: React.FC = () => {
                   <div className="relative">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 ml-1">Cari OpsID / Nama Lengkap</label>
                       <input 
+                        ref={inputRef}
                         type="text" 
                         value={opsId}
                         onChange={(e) => handleSearch(e.target.value)}
-                        className="w-full border-2 border-gray-100 bg-gray-50 rounded-2xl p-4 text-lg font-black text-gray-800 focus:border-blue-500 focus:bg-white focus:outline-none transition-all placeholder:text-gray-300"
-                        placeholder="Ketik OpsID..."
+                        className="w-full border-2 border-gray-100 bg-gray-50 rounded-2xl p-4 text-lg font-black text-gray-800 focus:border-blue-500 focus:bg-white focus:outline-none transition-all placeholder:text-gray-300 disabled:opacity-50"
+                        placeholder={dataLoading ? "Memuat data karyawan..." : "Ketik OpsID..."}
                         required
                         autoComplete="off"
+                        disabled={dataLoading}
                       />
                       {suggestions.length > 0 && (
                           <ul className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-2xl mt-2 max-h-64 overflow-y-auto">
@@ -298,10 +300,10 @@ const PublicAttendance: React.FC = () => {
 
                   <button 
                     type="submit" 
-                    disabled={status === 'loading'}
+                    disabled={status === 'loading' || dataLoading}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-200 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
-                      {status === 'loading' ? (
+                      {status === 'loading' || dataLoading ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                       ) : 'Konfirmasi Absensi'}
                   </button>
