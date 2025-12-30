@@ -406,15 +406,24 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     const worksheet = XLSX.utils.json_to_sheet(sampleData, { header: headers });
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Template');
-    XLSX.writeFile(workbook, 'Template_Database_Worker.xlsx');
+    XLSX.writeFile(workbook, 'Template_Import_Karyawan_Baru.xlsx');
   };
   
   const handleExport = () => {
-    const dataToExport = workers.map(({ id, createdAt, ...rest }) => rest);
+    const dataToExport = workers.map(w => ({
+        id: w.id, // ID is crucial for the update workflow
+        opsId: w.opsId,
+        fullName: w.fullName,
+        nik: w.nik,
+        phone: w.phone,
+        contractType: w.contractType,
+        department: w.department,
+        status: w.status,
+    }));
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Workers');
-    XLSX.writeFile(workbook, 'Database_Worker_Export.xlsx');
+    XLSX.writeFile(workbook, 'Export_Database_Karyawan.xlsx');
   };
 
   const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -424,86 +433,120 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
     const reader = new FileReader();
     reader.onload = async (e) => {
         setLoadingAction(true);
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const json: any[] = XLSX.utils.sheet_to_json(worksheet);
+        try {
+            const data = e.target?.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            const json: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-        const departmentValues = divisionOpts;
-        const statusValues: Worker['status'][] = ['Active', 'Non Active', 'Blacklist'];
-        const existingOpsIds = new Set(workers.map(w => w.opsId.toLowerCase()));
-        
-        const workersToInsert: any[] = [];
-        const failedImports: { row: any; reason: string }[] = [];
-
-        for (const row of json) {
-            const opsId = row.opsId?.toString().trim();
-            if (!opsId) { failedImports.push({ row, reason: "OpsID is missing." }); continue; }
-            if (existingOpsIds.has(opsId.toLowerCase())) { failedImports.push({ row, reason: "Duplicate OpsID." }); continue; }
-            if (!row.fullName || !row.nik || !row.phone) { failedImports.push({ row, reason: "Required field is empty." }); continue; }
-            
-            // Validate against dynamic divisions (case-insensitive)
-            if (!departmentValues.some(d => d.toLowerCase() === row.department?.toLowerCase())) {
-                 failedImports.push({ row, reason: `Invalid department: ${row.department}` });
-                continue;
+            if (json.length === 0) {
+                showToast("File Excel kosong.", { type: 'info', title: 'Info' });
+                setLoadingAction(false);
+                return;
             }
-            if (!statusValues.includes(row.status)) { failedImports.push({ row, reason: `Invalid status: ${row.status}` }); continue; }
 
-            existingOpsIds.add(opsId.toLowerCase());
-            // Normalize department casing
-            const matchedDept = departmentValues.find(d => d.toLowerCase() === row.department?.toLowerCase()) || row.department;
+            const departmentValues = divisionOpts;
+            const statusValues: Worker['status'][] = ['Active', 'Non Active', 'Blacklist'];
+            
+            let successfulRecords: any[] = [];
+            let failedRecords: { row: any; reason: string }[] = [];
 
-            workersToInsert.push({
-                ops_id: opsId, 
-                full_name: row.fullName, 
-                nik: row.nik.toString(), 
-                phone: row.phone.toString(),
-                contract_type: 'Daily Worker Vendor', 
-                department: matchedDept, 
-                status: row.status,
-                created_at: new Date().toISOString(),
-            });
-        }
-        
-        const successfulInserts: any[] = [];
-        const dbSaveFailed: { row: any; reason: string }[] = [];
+            const isUpdateMode = json[0].hasOwnProperty('id');
 
-        if (workersToInsert.length > 0) {
-            const BATCH_SIZE = 100;
-            for (let i = 0; i < workersToInsert.length; i += BATCH_SIZE) {
-                const batch = workersToInsert.slice(i, i + BATCH_SIZE);
-                const { data, error } = await supabase.from('workers').insert(batch).select();
+            if (isUpdateMode) {
+                // --- UPDATE (UPSERT) LOGIC ---
+                const workersToUpsert: any[] = [];
+                const existingWorkerMap = new Map<string, string>();
+                workers.forEach(w => {
+                    if (w.id) existingWorkerMap.set(w.opsId.toLowerCase(), w.id);
+                });
 
-                if (error) {
-                    batch.forEach(worker => {
-                        dbSaveFailed.push({ row: worker, reason: `DB Error: ${error.message}` });
+                for (const row of json) {
+                    if (!row.id) { failedRecords.push({ row, reason: "Mode update, tetapi kolom 'id' kosong." }); continue; }
+                    
+                    const opsIdStr = row.opsId?.toString().trim();
+                    if (!opsIdStr) { failedRecords.push({ row, reason: "OpsID tidak boleh kosong." }); continue; }
+
+                    const conflictingWorkerId = existingWorkerMap.get(opsIdStr.toLowerCase());
+                    if (conflictingWorkerId && conflictingWorkerId !== row.id) {
+                        failedRecords.push({ row, reason: `OpsID '${opsIdStr}' sudah digunakan oleh karyawan lain.` });
+                        continue;
+                    }
+
+                    if (!row.department || !departmentValues.some(d => d.toLowerCase() === row.department?.toLowerCase())) { failedRecords.push({ row, reason: `Divisi tidak valid: ${row.department}` }); continue; }
+                    if (!row.status || !statusValues.includes(row.status)) { failedRecords.push({ row, reason: `Status tidak valid: ${row.status}` }); continue; }
+                    
+                    const matchedDept = departmentValues.find(d => d.toLowerCase() === row.department?.toLowerCase()) || row.department;
+                    workersToUpsert.push({
+                        id: row.id,
+                        ops_id: opsIdStr,
+                        full_name: row.fullName,
+                        nik: row.nik?.toString() ?? '',
+                        phone: row.phone?.toString() ?? '',
+                        contract_type: 'Daily Worker Vendor',
+                        department: matchedDept,
+                        status: row.status,
                     });
-                } else if (data) {
-                    successfulInserts.push(...data);
+                }
+                if (workersToUpsert.length > 0) {
+                    const { data, error } = await supabase.from('workers').upsert(workersToUpsert).select();
+                    if (error) throw error;
+                    successfulRecords = data || [];
+                }
+            } else {
+                // --- INSERT LOGIC ---
+                const existingOpsIds = new Set(workers.map(w => w.opsId.toLowerCase()));
+                const workersToInsert: any[] = [];
+                for (const row of json) {
+                    const opsId = row.opsId?.toString().trim();
+                    if (!opsId) { failedRecords.push({ row, reason: "OpsID kosong." }); continue; }
+                    if (existingOpsIds.has(opsId.toLowerCase())) { failedRecords.push({ row, reason: "OpsID duplikat." }); continue; }
+                    if (!row.fullName || !row.nik || !row.phone) { failedRecords.push({ row, reason: "Kolom wajib kosong." }); continue; }
+                    if (!row.department || !departmentValues.some(d => d.toLowerCase() === row.department?.toLowerCase())) { failedRecords.push({ row, reason: `Divisi tidak valid: ${row.department}` }); continue; }
+                    if (!row.status || !statusValues.includes(row.status)) { failedRecords.push({ row, reason: `Status tidak valid: ${row.status}` }); continue; }
+                    
+                    existingOpsIds.add(opsId.toLowerCase());
+                    const matchedDept = departmentValues.find(d => d.toLowerCase() === row.department?.toLowerCase()) || row.department;
+                    workersToInsert.push({
+                        ops_id: opsId,
+                        full_name: row.fullName,
+                        nik: row.nik.toString(),
+                        phone: row.phone.toString(),
+                        contract_type: 'Daily Worker Vendor',
+                        department: matchedDept,
+                        status: row.status,
+                        created_at: new Date().toISOString(),
+                    });
+                }
+                if (workersToInsert.length > 0) {
+                    const { data, error } = await supabase.from('workers').insert(workersToInsert).select();
+                    if (error) throw error;
+                    successfulRecords = data || [];
                 }
             }
-        }
 
-        setImportResults({
-            success: successfulInserts,
-            failed: [...failedImports, ...dbSaveFailed]
-        });
-        
-        if (successfulInserts.length > 0) {
-            showToast(`${successfulInserts.length} data berhasil diimpor.`, { type: 'success', title: 'Impor Berhasil' });
-            refreshData();
+            setImportResults({ success: successfulRecords, failed: failedRecords });
+            
+            const totalSuccess = successfulRecords.length;
+            const totalFailed = failedRecords.length;
+            const modeText = isUpdateMode ? "diperbarui" : "diimpor";
+
+            if (totalSuccess > 0) showToast(`${totalSuccess} data berhasil ${modeText}.`, { type: 'success', title: 'Berhasil' });
+            if (totalFailed > 0) showToast(`${totalFailed} data gagal ${modeText}. Cek summary.`, { type: 'error', title: 'Gagal Sebagian' });
+            if (totalSuccess === 0 && totalFailed === 0) showToast("Tidak ada data baru untuk diimpor atau diperbarui.", { type: 'info', title: 'Info' });
+            if (totalSuccess > 0) refreshData();
+        } catch (err: any) {
+            showToast(`Terjadi error saat impor: ${err.message}`, { type: 'error', title: 'Error Kritis' });
+        } finally {
+            setLoadingAction(false);
+            setIsImportSummaryOpen(true);
+            if (importFileRef.current) importFileRef.current.value = '';
         }
-        if (failedImports.length > 0 || dbSaveFailed.length > 0) {
-            showToast(`${failedImports.length + dbSaveFailed.length} data gagal diimpor. Cek summary.`, { type: 'error', title: 'Impor Gagal Sebagian' });
-        }
-        
-        setLoadingAction(false);
-        setIsImportSummaryOpen(true);
-        if (importFileRef.current) importFileRef.current.value = '';
     };
     reader.readAsBinaryString(file);
   };
+
 
   return (
     <div className="space-y-6">
@@ -516,21 +559,28 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             >
                 <AddIcon /> <span className="hidden sm:inline">Add New</span>
             </button>
-            <button
-                onClick={handleDownloadTemplate}
-                className="flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all border border-gray-300"
-            >
-                <DownloadIcon /> <span className="hidden sm:inline">Download Template</span>
-            </button>
-            <button 
-                onClick={() => importFileRef.current?.click()}
-                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all"
-            >
-                <UploadIcon /> <span className="hidden sm:inline">Import Excel</span>
-            </button>
+
+            <div className="flex items-center rounded-lg shadow-sm border border-gray-300">
+                <button
+                    onClick={handleDownloadTemplate}
+                    className="flex items-center gap-2 bg-white hover:bg-gray-100 text-gray-700 font-bold py-2 px-3 rounded-l-lg transition-all"
+                    title="Download template untuk menambah karyawan baru"
+                >
+                    <DownloadIcon /> <span className="hidden xl:inline">Template</span>
+                </button>
+                <div className="w-px h-full bg-gray-300"></div>
+                <button 
+                    onClick={() => importFileRef.current?.click()}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-r-lg transition-all"
+                    title="Impor karyawan baru dari template, atau perbarui data dari file hasil ekspor"
+                >
+                    <UploadIcon /> <span className="hidden xl:inline">Import / Update</span>
+                </button>
+            </div>
             <input type="file" ref={importFileRef} onChange={handleImport} accept=".xlsx, .xls" className="hidden" />
-            <button onClick={handleExport} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
-                <DownloadIcon /> <span className="hidden sm:inline">Export</span>
+
+            <button onClick={handleExport} className="flex items-center gap-2 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all" title="Ekspor semua data untuk backup atau edit massal">
+                <DownloadIcon /> <span className="hidden sm:inline">Export Data</span>
             </button>
              <button onClick={() => setIsDeleteAllConfirmOpen(true)} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm hover:shadow-md transition-all">
                 <DeleteIcon /> <span className="hidden sm:inline">Reset DB</span>
@@ -770,7 +820,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
                     <p className="text-green-800 font-bold text-2xl">{importResults.success.length}</p>
-                    <p className="text-green-600 text-sm">Successfully Imported</p>
+                    <p className="text-green-600 text-sm">Successfully Imported / Updated</p>
                 </div>
                 <div className="bg-red-50 p-4 rounded-lg border border-red-200 text-center">
                     <p className="text-red-800 font-bold text-2xl">{importResults.failed.length}</p>
@@ -793,8 +843,8 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
                             <tbody>
                                 {importResults.failed.map((fail, idx) => (
                                     <tr key={idx} className="border-b border-gray-100 last:border-0">
-                                        <td className="p-1 font-mono">{fail.row.opsId || '-'}</td>
-                                        <td className="p-1">{fail.row.fullName || '-'}</td>
+                                        <td className="p-1 font-mono">{fail.row.opsId || fail.row.ops_id || '-'}</td>
+                                        <td className="p-1">{fail.row.fullName || fail.row.full_name || '-'}</td>
                                         <td className="p-1 text-red-600">{fail.reason}</td>
                                     </tr>
                                 ))}

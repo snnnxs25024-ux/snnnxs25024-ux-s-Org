@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import GoogleIcon from '../components/icons/GoogleIcon';
+import Modal from '../components/Modal';
 
 // Menggunakan logo yang diberikan oleh user
 const LOGO_URL = 'https://i.imgur.com/lie9EMX.png';
@@ -15,6 +16,14 @@ const LoginPage: React.FC = () => {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // State for Forgot Password Modal
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotSuccess, setForgotSuccess] = useState<string | null>(null);
+
 
   // Load email jika "Ingat Saya" pernah dicentang sebelumnya
   useEffect(() => {
@@ -61,7 +70,33 @@ const LoginPage: React.FC = () => {
     // The page will redirect on success, so no need to set loading to false here.
   };
 
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotLoading(true);
+    setForgotError(null);
+    setForgotSuccess(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+        redirectTo: window.location.origin + '/',
+    });
+
+    setForgotLoading(false);
+    if (error) {
+        setForgotError('Gagal mengirim email. Pastikan email benar dan coba lagi.');
+    } else {
+        setForgotSuccess(`Jika email "${forgotEmail}" terdaftar, link untuk reset password telah dikirim.`);
+    }
+  };
+
+  const openForgotModal = () => {
+    setForgotEmail('');
+    setForgotError(null);
+    setForgotSuccess(null);
+    setIsForgotModalOpen(true);
+  };
+
   return (
+    <>
     <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
       
       {/* LEFT: Hero Warehouse Section */}
@@ -155,7 +190,7 @@ const LoginPage: React.FC = () => {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Kata Sandi</label>
-                <a href="#" className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Lupa Sandi?</a>
+                <button type="button" onClick={openForgotModal} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Lupa Sandi?</button>
               </div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
@@ -276,6 +311,51 @@ const LoginPage: React.FC = () => {
         }
       `}</style>
     </div>
+    
+    <Modal isOpen={isForgotModalOpen} onClose={() => setIsForgotModalOpen(false)} title="Reset Password" size="md">
+        <form onSubmit={handleForgotPassword} className="space-y-6">
+            <p className="text-sm text-gray-600">
+                Masukkan alamat email Anda yang terdaftar. Kami akan mengirimkan link untuk mengatur ulang password Anda.
+            </p>
+            
+            {forgotSuccess ? (
+                <div className="p-4 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-semibold">
+                    {forgotSuccess}
+                </div>
+            ) : (
+                <>
+                    {forgotError && (
+                        <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold">
+                            {forgotError}
+                        </div>
+                    )}
+                    <div>
+                        <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-2">Alamat Email</label>
+                        <input
+                            type="email"
+                            id="forgot-email"
+                            value={forgotEmail}
+                            onChange={(e) => setForgotEmail(e.target.value)}
+                            required
+                            className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder="anda@email.com"
+                        />
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4">
+                        <button type="button" onClick={() => setIsForgotModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium transition-colors">
+                            Batal
+                        </button>
+                        <button type="submit" disabled={forgotLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
+                            {forgotLoading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
+                            {forgotLoading ? 'Mengirim...' : 'Kirim Link Reset'}
+                        </button>
+                    </div>
+                </>
+            )}
+        </form>
+    </Modal>
+    </>
   );
 };
 

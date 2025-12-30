@@ -9,16 +9,19 @@ import PublicAttendance from './pages/PublicAttendance';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
 import WelcomePage from './pages/WelcomePage';
+import UpdatePasswordPage from './pages/UpdatePasswordPage';
 import { Worker, AttendanceSession, AttendanceRecord } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
 import { ToastProvider } from './contexts/ToastContext';
 
 export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
+type AuthAction = 'IDLE' | 'RECOVERY';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [authAction, setAuthAction] = useState<AuthAction>('IDLE');
   const [showWelcome, setShowWelcome] = useState(true);
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -36,11 +39,14 @@ const App: React.FC = () => {
   const [autoOpenSessionId, setAutoOpenSessionId] = useState<string | null>(null);
 
   useEffect(() => {
-    // This listener will fire immediately with the initial session state,
-    // and then again whenever the session changes. This is more robust.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      setAuthLoading(false); // Set loading to false once we have the auth state.
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthAction('RECOVERY');
+      } else {
+        setAuthAction('IDLE');
+      }
+      setAuthLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -175,12 +181,12 @@ const App: React.FC = () => {
   }, [session, workers.length]); 
 
   useEffect(() => {
-    if (!isPublicMode && session) {
+    if (!isPublicMode && session && authAction !== 'RECOVERY') {
         fetchData();
     } else {
         setLoading(false); 
     }
-  }, [isPublicMode, session, fetchData]); 
+  }, [isPublicMode, session, fetchData, authAction]); 
   
   // Real-time data synchronization
   useEffect(() => {
@@ -209,6 +215,15 @@ const App: React.FC = () => {
 
   if (isPublicMode) {
       return <PublicAttendance />;
+  }
+
+  // Handle password recovery state BEFORE checking for session
+  if (authAction === 'RECOVERY') {
+    return (
+      <ToastProvider>
+        <UpdatePasswordPage />
+      </ToastProvider>
+    );
   }
 
   if (authLoading) {
