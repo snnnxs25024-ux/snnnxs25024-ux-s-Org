@@ -16,6 +16,18 @@ import CopyIcon from '../components/icons/CopyIcon';
 import SearchIcon from '../components/icons/SearchIcon';
 import { useToast } from '../hooks/useToast';
 
+// Helper Icon Components for the new Worker Detail Card
+import IdCardIcon from '../components/icons/IdCardIcon';
+import PhoneIcon from '../components/icons/PhoneIcon';
+
+// Helper function to get initials from a name
+const getInitials = (name: string) => {
+  if (!name) return '?';
+  const names = name.split(' ');
+  if (names.length === 1) return names[0].charAt(0).toUpperCase();
+  return (names[0].charAt(0) + names[names.length - 1].charAt(0)).toUpperCase();
+};
+
 interface DatabaseProps {
   workers: Worker[];
   refreshData: () => void;
@@ -68,6 +80,7 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
   const [departmentFilter, setDepartmentFilter] = useState('All');
   const [divisionOpts, setDivisionOpts] = useState<string[]>([]);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [viewQrCodeUrl, setViewQrCodeUrl] = useState('');
   const importFileRef = useRef<HTMLInputElement>(null);
   const { showToast } = useToast();
 
@@ -99,6 +112,63 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
         );
       });
   }, [workers, searchTerm, departmentFilter]);
+  
+  // QR Code Generation for the new View Modal
+  useEffect(() => {
+    if (isViewModalOpen && selectedWorker?.opsId) {
+        const generateQrWithLogo = async (opsId: string) => {
+            try {
+                const canvas = document.createElement('canvas');
+                await QRCode.toCanvas(canvas, opsId, { width: 256, margin: 2, errorCorrectionLevel: 'H' });
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    setViewQrCodeUrl(canvas.toDataURL());
+                    return;
+                }
+                const logo = new Image();
+                logo.crossOrigin = 'Anonymous';
+                logo.src = 'https://i.imgur.com/lie9EMX.png';
+                logo.onload = () => {
+                    const logoSize = canvas.width * 0.25;
+                    const logoX = (canvas.width - logoSize) / 2;
+                    const logoY = (canvas.height - logoSize) / 2;
+                    ctx.fillStyle = 'white';
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10, 8);
+                    } else {
+                        ctx.rect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
+                    }
+                    ctx.fill();
+                    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                    setViewQrCodeUrl(canvas.toDataURL('image/png'));
+                };
+                logo.onerror = () => setViewQrCodeUrl(canvas.toDataURL('image/png'));
+            } catch (err) {
+                console.error("Error generating QR for view modal", err);
+            }
+        };
+        generateQrWithLogo(selectedWorker.opsId);
+    }
+}, [isViewModalOpen, selectedWorker]);
+
+  const statusBadge = useMemo(() => {
+    if (!selectedWorker) return { bg: '', text: '', border: '' };
+    switch (selectedWorker.status) {
+        case 'Active': return { bg: 'bg-green-100', text: 'text-green-800', border: 'border-green-200' };
+        case 'Blacklist': return { bg: 'bg-red-100', text: 'text-red-800', border: 'border-red-200' };
+        case 'Non Active': return { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-200' };
+        default: return { bg: 'bg-gray-100', text: 'text-gray-800', border: 'border-gray-200' };
+    }
+  }, [selectedWorker]);
+
+  const handleCopy = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+        showToast(`${fieldName} disalin ke clipboard.`, { type: 'success', title: 'Tersalin!' });
+    }, (err) => {
+        showToast(`Gagal menyalin ${fieldName}.`, { type: 'error', title: 'Error' });
+    });
+  };
 
   const openViewModal = (worker: Worker) => {
     setSelectedWorker(worker);
@@ -535,42 +605,88 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
             </table>
         </div>
       </div>
-
-      <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Worker Details">
+      
+      {/* New Worker Detail Modal */}
+      <Modal isOpen={isViewModalOpen} onClose={() => setIsViewModalOpen(false)} title="Detail Karyawan" size="lg" scrollable={false}>
         {selectedWorker && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">OpsID</p>
-                    <p className="text-lg font-mono text-black">{selectedWorker.opsId}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">Full Name</p>
-                    <p className="text-lg text-gray-800">{selectedWorker.fullName}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">NIK KTP</p>
-                    <p className="text-gray-700 font-mono">{selectedWorker.nik}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">Phone / WA</p>
-                    <p className="text-gray-700 font-mono">{selectedWorker.phone}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">Department</p>
-                    <p className="text-gray-700">{selectedWorker.department}</p>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-                    <p className="text-xs text-gray-500 uppercase font-bold">Status</p>
-                    <span className={`inline-block mt-1 px-2 py-1 rounded text-sm font-bold ${selectedWorker.status === 'Active' ? 'bg-green-200 text-green-800' : 'bg-red-200 text-red-800'}`}>
+            <div className="font-sans flex flex-col">
+                {/* Header */}
+                <div className="relative flex justify-between items-start px-6 pt-4 pb-3 bg-gray-50 rounded-t-lg">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800 tracking-tight">{selectedWorker.fullName}</h2>
+                        <p className="text-base font-mono text-blue-600 select-all">{selectedWorker.opsId}</p>
+                    </div>
+                    <span className={`px-3 py-1 text-xs font-black uppercase tracking-widest rounded-full ${statusBadge.bg} ${statusBadge.text} border ${statusBadge.border}`}>
                         {selectedWorker.status}
                     </span>
                 </div>
+
+                {/* Main Content */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 px-6 py-6">
+                    {/* Left Column: Info */}
+                    <div className="space-y-5">
+                        <div className="flex items-center gap-4">
+                            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center shrink-0 border-4 border-white ring-2 ring-blue-200">
+                                <span className="text-3xl font-bold text-blue-600">{getInitials(selectedWorker.fullName)}</span>
+                            </div>
+                            <div>
+                                <p className="font-bold text-gray-700 text-lg">{selectedWorker.department}</p>
+                                <p className="text-sm text-gray-500">{selectedWorker.contractType}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 border-t border-gray-100 pt-4">
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-3">
+                                    <IdCardIcon className="text-gray-400" />
+                                    <div>
+                                        <p className="text-xs text-gray-500">NIK KTP</p>
+                                        <p className="text-gray-700 font-mono font-medium">{selectedWorker.nik}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => handleCopy(selectedWorker.nik, 'NIK')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity p-2 rounded-lg hover:bg-blue-50">
+                                    <CopyIcon />
+                                </button>
+                            </div>
+                            <div className="flex items-center justify-between group">
+                                <div className="flex items-center gap-3">
+                                    <PhoneIcon className="text-gray-400" />
+                                    <div>
+                                        <p className="text-xs text-gray-500">Phone / WA</p>
+                                        <p className="text-gray-700 font-mono font-medium">{selectedWorker.phone}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => handleCopy(selectedWorker.phone, 'No. Telepon')} className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-600 transition-opacity p-2 rounded-lg hover:bg-blue-50">
+                                    <CopyIcon />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Right Column: QR Code */}
+                    <div className="flex flex-col items-center justify-center bg-gray-50 p-4 rounded-xl border border-dashed">
+                        {viewQrCodeUrl ? (
+                            <img src={viewQrCodeUrl} alt="QR Code" className="w-44 h-44 rounded-lg" />
+                        ) : (
+                            <div className="w-44 h-44 bg-gray-200 animate-pulse rounded-lg flex items-center justify-center text-xs text-gray-400">Generating QR...</div>
+                        )}
+                        <p className="mt-3 text-xs text-gray-500 font-semibold uppercase tracking-wider">Scan for Quick Actions</p>
+                    </div>
+                </div>
+
+                {/* Footer Actions */}
+                <div className="flex justify-end gap-3 p-4 mt-2 border-t bg-gray-50 rounded-b-lg">
+                    <button onClick={() => { openEditModal(selectedWorker); setIsViewModalOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">
+                        <EditIcon /> Edit
+                    </button>
+                    <button onClick={() => { openDeleteConfirm(selectedWorker); setIsViewModalOpen(false); }} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-red-600 bg-red-100 rounded-lg hover:bg-red-200 transition-colors">
+                        <DeleteIcon /> Delete
+                    </button>
+                    <button onClick={() => openQrModal(selectedWorker!)} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                        <PrintIcon /> Print ID Card
+                    </button>
+                </div>
             </div>
-            <div className="flex justify-end pt-4">
-                <button onClick={() => setIsViewModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium">Close</button>
-            </div>
-          </div>
         )}
       </Modal>
 

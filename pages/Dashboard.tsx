@@ -212,6 +212,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const { showToast } = useToast();
     
     const [manualAddSuggestions, setManualAddSuggestions] = useState<Worker[]>([]);
+    const [manualAddHighlightedIndex, setManualAddHighlightedIndex] = useState(-1);
     const manualAddSearchRef = useRef<HTMLDivElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -577,6 +578,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const query = e.target.value;
         setManualAddOpsId(query);
         setManualAddError(null);
+        setManualAddHighlightedIndex(-1); // Reset on new input
 
         if (query.length > 1 && selectedSession) {
             const sessionRecordOpsIds = new Set(selectedSession.records.map(r => r.opsId));
@@ -596,6 +598,23 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         setManualAddSuggestions([]);
     };
     
+    const handleManualAddKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (manualAddSuggestions.length === 0) return;
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setManualAddHighlightedIndex(prev => (prev + 1) % manualAddSuggestions.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setManualAddHighlightedIndex(prev => (prev - 1 + manualAddSuggestions.length) % manualAddSuggestions.length);
+        } else if (e.key === 'Enter') {
+            if (manualAddHighlightedIndex > -1) {
+                e.preventDefault();
+                handleManualAddSuggestionClick(manualAddSuggestions[manualAddHighlightedIndex]);
+            }
+        }
+    };
+
     const handleManualAdd = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         setManualAddSuggestions([]);
@@ -1550,6 +1569,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                            type="text" 
                                            value={manualAddOpsId} 
                                            onChange={handleManualAddOpsIdChange} 
+                                           onKeyDown={handleManualAddKeyDown}
                                            placeholder="Ketik OpsID atau Nama Karyawan..." 
                                            className="w-full flex-grow bg-gray-50 border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" 
                                            required 
@@ -1557,11 +1577,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                        />
                                        {manualAddSuggestions.length > 0 && (
                                            <ul className="absolute z-20 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-48 overflow-y-auto bottom-full mb-2">
-                                               {manualAddSuggestions.map(worker => (
+                                               {manualAddSuggestions.map((worker, index) => (
                                                    <li 
                                                        key={worker.id} 
                                                        onClick={() => handleManualAddSuggestionClick(worker)} 
-                                                       className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+                                                       className={`p-3 cursor-pointer border-b last:border-0 ${index === manualAddHighlightedIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
                                                    >
                                                        <p className="font-semibold text-sm text-gray-800">{worker.fullName}</p>
                                                        <p className="text-xs text-black font-mono">{worker.opsId}</p>

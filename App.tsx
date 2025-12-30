@@ -181,6 +181,26 @@ const App: React.FC = () => {
         setLoading(false); 
     }
   }, [isPublicMode, session, fetchData]); 
+  
+  // Real-time data synchronization
+  useEffect(() => {
+    if (!session || isPublicMode) return;
+
+    // A simple and robust way to keep data in sync is to refetch on any change.
+    const subscription = supabase
+      .channel('any-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_sessions' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [session, isPublicMode, fetchData]);
 
   // Fungsi untuk membersihkan state auto-open setelah digunakan
   const clearAutoOpenSessionId = () => {

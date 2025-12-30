@@ -44,6 +44,7 @@ const Attendance: React.FC<AttendanceProps> = ({
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Worker[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
@@ -117,6 +118,7 @@ const Attendance: React.FC<AttendanceProps> = ({
     const query = e.target.value;
     setOpsIdInput(query);
     setError(null);
+    setHighlightedIndex(-1);
 
     if (query.length > 1) {
         const activeRecordOpsIds = new Set(activeRecords.map(r => r.opsId));
@@ -137,6 +139,23 @@ const Attendance: React.FC<AttendanceProps> = ({
       inputRef.current?.focus();
   };
   
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (suggestions.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setHighlightedIndex(prev => (prev + 1) % suggestions.length);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setHighlightedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === 'Enter') {
+        if (highlightedIndex > -1) {
+            e.preventDefault();
+            handleSuggestionClick(suggestions[highlightedIndex]);
+        }
+    }
+  };
+
   const handleScan = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       if (!opsIdInput.trim() || !activeSession) return;
@@ -343,17 +362,18 @@ const Attendance: React.FC<AttendanceProps> = ({
                         type="text"
                         value={opsIdInput}
                         onChange={handleOpsIdChange}
+                        onKeyDown={handleKeyDown}
                         placeholder="Scan or type OpsID/Name..."
                         className="w-full bg-white border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         autoComplete="off"
                     />
                     {suggestions.length > 0 && (
                         <ul className="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-lg mt-1 max-h-60 overflow-y-auto">
-                            {suggestions.map(worker => (
+                            {suggestions.map((worker, index) => (
                                 <li 
                                     key={worker.id} 
                                     onClick={() => handleSuggestionClick(worker)} 
-                                    className="p-3 hover:bg-blue-50 cursor-pointer border-b last:border-0"
+                                    className={`p-3 cursor-pointer border-b last:border-0 ${index === highlightedIndex ? 'bg-blue-100' : 'hover:bg-blue-50'}`}
                                 >
                                     <p className="font-semibold text-sm text-gray-800">{worker.fullName}</p>
                                     <p className="text-xs text-black font-mono">{worker.opsId}</p>
