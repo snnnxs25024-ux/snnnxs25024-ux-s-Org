@@ -41,11 +41,19 @@ const App: React.FC = () => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
-      if (event === 'PASSWORD_RECOVERY') {
-        setAuthAction('RECOVERY');
-      } else {
-        setAuthAction('IDLE');
-      }
+      
+      setAuthAction(currentAuthAction => {
+        if (event === 'PASSWORD_RECOVERY') {
+          return 'RECOVERY';
+        }
+        // If we are currently in recovery, only a SIGNED_OUT event can pull us out.
+        if (currentAuthAction === 'RECOVERY' && event !== 'SIGNED_OUT') {
+          return 'RECOVERY'; 
+        }
+        // Otherwise, default to IDLE.
+        return 'IDLE';
+      });
+
       setAuthLoading(false);
     });
 
