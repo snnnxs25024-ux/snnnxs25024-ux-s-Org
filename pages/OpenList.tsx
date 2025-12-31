@@ -74,7 +74,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                   .eq('status', 'OPEN')
                   .eq('date', today)
                   .eq('session_type', 'PUBLIC')
-                  .order('created_at', { ascending: false })
                   .limit(1)
                   .maybeSingle();
 
@@ -103,7 +102,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           }
       };
       restoreSession();
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -202,7 +201,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     return () => {
         supabase.removeChannel(channel);
     };
-  }, [activeSession?.id, workers]);
+  }, [activeSession?.id, workers, showToast]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
