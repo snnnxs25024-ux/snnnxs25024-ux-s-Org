@@ -255,7 +255,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const handleCloseSession = async () => {
       if (!activeSession) return;
       setIsCloseConfirmOpen(false);
-      const sessionId = activeSession.id; // Store ID before any async operation
+      const sessionId = activeSession.id; // Store ID before async operation
+      
       const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', sessionId);
       
       if (error) {
@@ -265,7 +266,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       
       showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
       
-      // Redirect immediately. The page reload will reset state naturally.
+      // Redirect AFTER the await completes. The page reload will reset state naturally.
       window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
   };
 
