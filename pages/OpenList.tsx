@@ -33,6 +33,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const [activeSession, setActiveSession] = useState<AttendanceSession | null>(null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [autoClose, setAutoClose] = useState(true);
@@ -64,31 +65,41 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
 
   useEffect(() => {
       const restoreSession = async () => {
+          setIsLoadingSession(true);
           const today = getTodayString();
-          const { data } = await supabase
-              .from('attendance_sessions')
-              .select('*')
-              .eq('status', 'OPEN')
-              .eq('date', today)
-              .eq('session_type', 'PUBLIC')
-              .order('id', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-          
-          if (data) {
-              const sessionState: AttendanceSession = {
-                id: data.id,
-                date: data.date,
-                division: data.division,
-                shiftTime: data.shift_time,
-                shiftId: data.shift_id,
-                planMpp: data.plan_mpp,
-                status: data.status,
-                session_type: data.session_type,
-                auto_close: data.auto_close,
-                records: []
-              };
-              setActiveSession(sessionState);
+          try {
+              const { data, error } = await supabase
+                  .from('attendance_sessions')
+                  .select('*')
+                  .eq('status', 'OPEN')
+                  .eq('date', today)
+                  .eq('session_type', 'PUBLIC')
+                  .order('created_at', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+
+              if (error) throw error;
+              
+              if (data) {
+                  const sessionState: AttendanceSession = {
+                    id: data.id,
+                    date: data.date,
+                    division: data.division,
+                    shiftTime: data.shift_time,
+                    shiftId: data.shift_id,
+                    planMpp: data.plan_mpp,
+                    status: data.status,
+                    session_type: data.session_type,
+                    auto_close: data.auto_close,
+                    records: []
+                  };
+                  setActiveSession(sessionState);
+              }
+          } catch (err: any) {
+              console.error("Failed to restore session:", err);
+              showToast('Gagal memulihkan sesi aktif.', { type: 'error', title: 'Error' });
+          } finally {
+              setIsLoadingSession(false);
           }
       };
       restoreSession();
@@ -102,7 +113,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
           .from('attendance_records')
           .select('*')
           .eq('session_id', activeSession.id)
-          .order('timestamp', { ascending: false });
+          .order('scan_timestamp', { ascending: false });
 
         if (data) {
            const enrichedData: AttendanceRecord[] = data.map((rec: any) => {
@@ -280,6 +291,17 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         setLiveRecords(prev => prev.filter(r => r.id !== recordId));
       }
   };
+
+  if (isLoadingSession) {
+    return (
+        <div className="flex justify-center items-center py-20">
+            <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                <p className="mt-4 text-sm text-gray-500">Memeriksa sesi aktif...</p>
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

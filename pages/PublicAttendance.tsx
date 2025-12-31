@@ -36,45 +36,61 @@ const PublicAttendance: React.FC = () => {
     
     const fetchData = async () => {
         setDataLoading(true);
-        const { data: sessionData } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
-        if(sessionData) {
-            const sessionState: AttendanceSession = {
-                id: sessionData.id,
-                date: sessionData.date,
-                division: sessionData.division,
-                shiftTime: sessionData.shift_time,
-                shiftId: sessionData.shift_id,
-                planMpp: sessionData.plan_mpp,
-                status: sessionData.status,
-                session_type: sessionData.session_type,
-                auto_close: sessionData.auto_close,
-                records: []
-            };
-            setSession(sessionState);
-            if (sessionData.status === 'CLOSED') {
-                setStatus('closed');
-            }
-        } else {
+        const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
+        
+        if (sessionError || !sessionData) {
             setStatus('error');
-            setMessage('Sesi tidak ditemukan.');
+            setMessage('Sesi tidak ditemukan atau tidak valid.');
+            setDataLoading(false);
+            return;
         }
 
-        const { data: workerData } = await supabase.from('workers').select('*').eq('status', 'Active');
-        if (workerData) {
-            const typedWorkers: Worker[] = workerData.map((w: any) => ({
-                id: w.id,
-                opsId: w.ops_id,
-                fullName: w.full_name,
-                nik: w.nik,
-                phone: w.phone,
-                contractType: w.contract_type,
-                department: w.department,
-                createdAt: w.created_at || new Date().toISOString(),
-                status: w.status,
-            }));
-            setWorkers(typedWorkers);
+        const sessionState: AttendanceSession = {
+            id: sessionData.id,
+            date: sessionData.date,
+            division: sessionData.division,
+            shiftTime: sessionData.shift_time,
+            shiftId: sessionData.shift_id,
+            planMpp: sessionData.plan_mpp,
+            status: sessionData.status,
+            session_type: sessionData.session_type,
+            auto_close: sessionData.auto_close,
+            records: []
+        };
+        setSession(sessionState);
+        if (sessionData.status === 'CLOSED') {
+            setStatus('closed');
+            setDataLoading(false);
+            return;
+        }
+        
+        // Use an RPC function for secure public access to worker data
+        const { data: workerData, error: workerError } = await supabase.rpc('get_public_workers');
+
+        if (workerError) {
+            console.error("RPC Error:", workerError);
+            setStatus('error');
+            setMessage('Gagal memuat daftar karyawan. (Error: RPC)');
+            setDataLoading(false);
+            return;
+        }
+        
+        if (!workerData || workerData.length === 0) {
+            setStatus('error');
+            setMessage('Tidak dapat mengambil daftar karyawan. Harap hubungi admin untuk memeriksa konfigurasi.');
+            setDataLoading(false);
+            return;
         }
 
+        const typedWorkers: Worker[] = workerData.map((w: any) => ({
+            id: w.id,
+            opsId: w.ops_id,
+            fullName: w.full_name,
+            department: w.department,
+            status: w.status,
+            nik: '', phone: '', contractType: 'Daily Worker Vendor', createdAt: '',
+        }));
+        setWorkers(typedWorkers);
         setDataLoading(false);
     };
 
@@ -85,7 +101,7 @@ const PublicAttendance: React.FC = () => {
             'postgres_changes',
             { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${id}` },
             (payload) => {
-                const newSession = payload.new as AttendanceSession;
+                const newSession = payload.new as any;
                 if (newSession.status === 'CLOSED') {
                     if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
                         setStatus('closed');
@@ -238,9 +254,12 @@ const PublicAttendance: React.FC = () => {
       );
   }
 
-  if(!session || dataLoading) {
-      if(status === 'error') return <div className="p-8 text-center text-red-600 mt-10 font-bold uppercase tracking-widest text-xs">Error: {message}</div>;
+  if(dataLoading) {
       return <div className="p-12 text-center text-gray-600 mt-10 animate-pulse font-black uppercase tracking-[0.3em] text-[10px]">Initializing Session...</div>;
+  }
+  
+  if(status === 'error' || !session) {
+      return <div className="p-8 text-center text-red-600 mt-10 font-bold uppercase tracking-widest text-xs">Error: {message || 'Sesi tidak dapat dimuat.'}</div>;
   }
 
   if (status === 'success' || status === 'buffer') {
@@ -292,7 +311,7 @@ const PublicAttendance: React.FC = () => {
                         placeholder={dataLoading ? "Memuat data karyawan..." : "Ketik OpsID..."}
                         required
                         autoComplete="off"
-                        disabled={dataLoading}
+                        disabled={dataLoading || workers.length === 0}
                       />
                       {suggestions.length > 0 && (
                           <ul className="absolute z-50 w-full bg-white border border-gray-100 rounded-2xl shadow-2xl mt-2 max-h-64 overflow-y-auto">
@@ -315,7 +334,7 @@ const PublicAttendance: React.FC = () => {
 
                   <button 
                     type="submit" 
-                    disabled={status === 'loading' || dataLoading}
+                    disabled={status === 'loading' || dataLoading || workers.length === 0}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-200 transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-3"
                   >
                       {status === 'loading' || dataLoading ? (
