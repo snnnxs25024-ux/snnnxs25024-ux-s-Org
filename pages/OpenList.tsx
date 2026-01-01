@@ -65,30 +65,69 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
     fetchMasterOptions();
   }, []);
   
-  // Restore session on initial load
+  // This hook now handles the complete lifecycle of session synchronization.
   useEffect(() => {
-      const restoreSession = async () => {
-          setIsLoadingSession(true);
-          // If a session is already in local storage, validate it
-          if (activeSession) {
-              const { data, error } = await supabase
-                  .from('attendance_sessions')
-                  .select('id, status')
-                  .eq('id', activeSession.id)
-                  .maybeSingle();
-              
-              if (error || !data || data.status === 'CLOSED') {
-                  // The stored session is invalid or closed, clear it.
-                  setActiveSession(null);
-              }
-              // If valid, we keep the session from local storage.
-          }
-          setIsLoadingSession(false);
-      };
-      restoreSession();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Run only once on mount
+    const syncActiveSession = async () => {
+      setIsLoadingSession(true);
+      const { data, error } = await supabase
+        .from('attendance_sessions')
+        .select('*')
+        .eq('status', 'OPEN')
+        .eq('session_type', 'PUBLIC')
+        .order('id', { ascending: false }) // In case of duplicates, take the newest
+        .limit(1)
+        .maybeSingle();
 
+      if (error) {
+        showToast('Gagal memeriksa sesi aktif.', { type: 'error' });
+        console.error('Error checking for active session:', error);
+      } else if (data) {
+        // Found an active session, update state
+        const newActiveSession: AttendanceSession = {
+          id: data.id,
+          date: data.date,
+          division: data.division,
+          shiftTime: data.shift_time,
+          shiftId: data.shift_id,
+          planMpp: data.plan_mpp,
+          status: data.status,
+          session_type: data.session_type,
+          auto_close: data.auto_close,
+          records: [], // Records are managed in a separate effect
+        };
+        // This will update both component state and localStorage via the hook
+        setActiveSession(newActiveSession);
+      } else {
+        // No active session found, ensure local state is cleared
+        setActiveSession(null);
+      }
+      setIsLoadingSession(false);
+    };
+    
+    // Initial check on component mount
+    syncActiveSession();
+    
+    // Subscribe to any changes on public sessions to keep all clients in sync
+    const channel = supabase
+      .channel('public-session-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_sessions', filter: 'session_type=eq.PUBLIC' },
+        () => {
+          // Re-run the sync logic whenever a public session is created, updated, or deleted
+          syncActiveSession();
+        }
+      )
+      .subscribe();
+    
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only on mount to set up the global sync mechanism.
+
+  // This hook is for managing the records of an ALREADY active session.
   useEffect(() => {
     if (!activeSession) {
       setLiveRecords([]);
@@ -129,7 +168,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
     };
     fetchLiveRecords();
 
-    const channel = supabase.channel(`open_list_${activeSession.id}`)
+    const recordsChannel = supabase.channel(`open_list_records_${activeSession.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'attendance_records', filter: `session_id=eq.${activeSession.id}` },
@@ -140,25 +179,12 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
             }
         }
       )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${activeSession.id}` },
-        (payload) => {
-            const updatedSession = payload.new as any;
-            if (updatedSession.status === 'CLOSED' && activeSession && updatedSession.id === activeSession.id) {
-                 showToast('Sesi ditutup otomatis karena kuota penuh. Mengalihkan...', { type: 'info', title: 'Sesi Ditutup Otomatis' });
-                 setAutoOpenSessionId(updatedSession.id);
-                 setActiveSession(null); // This will also clear localStorage
-                 setCurrentPage('Dashboard');
-            }
-        }
-      )
       .subscribe();
 
     return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(recordsChannel);
     };
-  }, [activeSession, workers, showToast, setCurrentPage, setAutoOpenSessionId, setActiveSession]);
+  }, [activeSession, workers, showToast]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -189,6 +215,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
       setIsLoading(false);
       showToast(`Gagal membuat link: ${insertError.message}`, { type: 'error', title: 'Error' });
     } else {
+      // The real-time subscription will handle setting the active session state.
+      // We can also optimistically set it here for instant feedback.
       const sessionState: AttendanceSession = {
           id: sessionDbData.id,
           date: sessionDbData.date,
@@ -201,7 +229,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
           auto_close: sessionDbData.auto_close,
           records: [],
       };
-      setActiveSession(sessionState); // This saves to localStorage
+      setActiveSession(sessionState);
       showToast('Link absensi publik berhasil dibuat.', { type: 'success', title: 'Berhasil Dibuat' });
       setIsLoading(false);
     }
@@ -219,9 +247,10 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
           return;
       }
       
+      // The real-time listener will handle clearing the state on all clients.
+      // But for this client, we navigate away.
       showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
       setAutoOpenSessionId(sessionId);
-      setActiveSession(null); // Clear local storage and state
       setCurrentPage('Dashboard');
   };
 
@@ -252,7 +281,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
         <div className="flex justify-center items-center py-20">
             <div className="flex flex-col items-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-                <p className="mt-4 text-sm text-gray-500">Memeriksa sesi aktif...</p>
+                <p className="mt-4 text-sm text-gray-500">Menyinkronkan sesi live...</p>
             </div>
         </div>
     );
