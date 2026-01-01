@@ -9,6 +9,7 @@ import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
 import { playSound } from '../utils/sound';
 import { Page } from '../App';
+import useLocalStorage from '../hooks/useLocalStorage';
 
 interface OpenListProps {
   workers: Worker[];
@@ -33,7 +34,7 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
 });
 
 const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpenSessionId }) => {
-  const [activeSession, setActiveSession] = useState<AttendanceSession | null>(null);
+  const [activeSession, setActiveSession] = useLocalStorage<AttendanceSession | null>('activePublicSession', null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);
@@ -63,59 +64,49 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
     };
     fetchMasterOptions();
   }, []);
-
-  const getTodayString = () => new Date().toISOString().split('T')[0];
-
+  
+  // Restore session on initial load
   useEffect(() => {
       const restoreSession = async () => {
           setIsLoadingSession(true);
-          const today = getTodayString();
-          try {
+          // If a session is already in local storage, validate it
+          if (activeSession) {
               const { data, error } = await supabase
                   .from('attendance_sessions')
-                  .select('*')
-                  .eq('status', 'OPEN')
-                  .eq('date', today)
-                  .eq('session_type', 'PUBLIC')
-                  .limit(1)
+                  .select('id, status')
+                  .eq('id', activeSession.id)
                   .maybeSingle();
-
-              if (error) throw error;
               
-              if (data) {
-                  const sessionState: AttendanceSession = {
-                    id: data.id,
-                    date: data.date,
-                    division: data.division,
-                    shiftTime: data.shift_time,
-                    shiftId: data.shift_id,
-                    planMpp: data.plan_mpp,
-                    status: data.status,
-                    session_type: data.session_type,
-                    auto_close: data.auto_close,
-                    records: []
-                  };
-                  setActiveSession(sessionState);
+              if (error || !data || data.status === 'CLOSED') {
+                  // The stored session is invalid or closed, clear it.
+                  setActiveSession(null);
               }
-          } catch (err: any) {
-              console.error("Failed to restore session:", err);
-              showToast('Gagal memulihkan sesi aktif.', { type: 'error', title: 'Error' });
-          } finally {
-              setIsLoadingSession(false);
+              // If valid, we keep the session from local storage.
           }
+          setIsLoadingSession(false);
       };
       restoreSession();
-  }, [showToast]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
 
   useEffect(() => {
-    if (!activeSession) return;
+    if (!activeSession) {
+      setLiveRecords([]);
+      return;
+    };
 
     const fetchLiveRecords = async () => {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('attendance_records')
           .select('*')
           .eq('session_id', activeSession.id)
           .order('scan_timestamp', { ascending: false });
+
+        if (error) {
+          console.error("Error fetching live records:", error);
+          showToast('Gagal memuat data absensi.', { type: 'error' });
+          return;
+        }
 
         if (data) {
            const enrichedData: AttendanceRecord[] = data.map((rec: any) => {
@@ -142,47 +133,10 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'attendance_records', filter: `session_id=eq.${activeSession.id}` },
-        async (payload) => {
-            if (payload.eventType === 'INSERT') {
-                 playSound('scan-success');
-                 const newRecord = payload.new as any;
-                 const worker = workers.find(w => w.id === newRecord.worker_id);
-                 const enriched: AttendanceRecord = {
-                   id: newRecord.id,
-                   workerId: newRecord.worker_id,
-                   opsId: worker?.opsId || 'N/A',
-                   fullName: worker?.fullName || 'Unknown',
-                   timestamp: newRecord.timestamp,
-                   scan_timestamp: newRecord.scan_timestamp,
-                   checkout_timestamp: newRecord.checkout_timestamp,
-                   manual_status: newRecord.manual_status,
-                   is_takeout: newRecord.is_takeout ?? false,
-                   is_arrived: newRecord.is_arrived
-                 };
-                 setLiveRecords(prev => [enriched, ...prev]);
-            } else if (payload.eventType === 'UPDATE') {
-                const updated = payload.new as any;
-                 setLiveRecords(prev => prev.map(r => {
-                    if (r.id === updated.id) {
-                        const worker = workers.find(w => w.id === updated.worker_id);
-                        return {
-                            ...r,
-                            id: updated.id,
-                            workerId: updated.worker_id,
-                            opsId: worker?.opsId || r.opsId,
-                            fullName: worker?.fullName || r.fullName,
-                            timestamp: updated.timestamp,
-                            scan_timestamp: updated.scan_timestamp,
-                            checkout_timestamp: updated.checkout_timestamp,
-                            manual_status: updated.manual_status,
-                            is_takeout: updated.is_takeout ?? false,
-                            is_arrived: updated.is_arrived,
-                        };
-                    }
-                    return r;
-                 }));
-            } else if (payload.eventType === 'DELETE') {
-                 setLiveRecords(prev => prev.filter(r => r.id !== (payload.old as any).id));
+        (payload) => {
+            fetchLiveRecords(); // Refetch all on any change for simplicity and robustness
+            if(payload.eventType === 'INSERT') {
+                playSound('scan-success');
             }
         }
       )
@@ -193,8 +147,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
             const updatedSession = payload.new as any;
             if (updatedSession.status === 'CLOSED' && activeSession && updatedSession.id === activeSession.id) {
                  showToast('Sesi ditutup otomatis karena kuota penuh. Mengalihkan...', { type: 'info', title: 'Sesi Ditutup Otomatis' });
-                 setActiveSession(null);
                  setAutoOpenSessionId(updatedSession.id);
+                 setActiveSession(null); // This will also clear localStorage
                  setCurrentPage('Dashboard');
             }
         }
@@ -204,7 +158,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
     return () => {
         supabase.removeChannel(channel);
     };
-  }, [activeSession?.id, workers, showToast, setCurrentPage, setAutoOpenSessionId]);
+  }, [activeSession, workers, showToast, setCurrentPage, setAutoOpenSessionId, setActiveSession]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -247,7 +201,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
           auto_close: sessionDbData.auto_close,
           records: [],
       };
-      setActiveSession(sessionState);
+      setActiveSession(sessionState); // This saves to localStorage
       showToast('Link absensi publik berhasil dibuat.', { type: 'success', title: 'Berhasil Dibuat' });
       setIsLoading(false);
     }
@@ -266,8 +220,8 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
       }
       
       showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
-      setActiveSession(null);
       setAutoOpenSessionId(sessionId);
+      setActiveSession(null); // Clear local storage and state
       setCurrentPage('Dashboard');
   };
 
@@ -315,7 +269,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpe
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Tanggal</label>
-                        <input type="date" name="sessionDate" defaultValue={getTodayString()} required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
+                        <input type="date" name="sessionDate" defaultValue={new Date().toISOString().split('T')[0]} required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
                     </div>
                     <div>
                         <label className="block mb-2 text-sm font-medium text-gray-700 font-bold uppercase tracking-wider text-[10px]">Divisi</label>
