@@ -119,9 +119,10 @@ const PublicAttendance: React.FC = () => {
   const handleSearch = (text: string) => {
       setOpsId(text);
       if(text.length > 1) {
+          const lowerText = text.trim().toLowerCase();
           const filtered = workers.filter(w => 
-              (w.opsId && w.opsId.toLowerCase().includes(text.toLowerCase())) || 
-              (w.fullName && w.fullName.toLowerCase().includes(text.toLowerCase()))
+              (w.opsId && w.opsId.trim().toLowerCase().includes(lowerText)) || 
+              (w.fullName && w.fullName.trim().toLowerCase().includes(lowerText))
           ).slice(0, 5);
           setSuggestions(filtered);
       } else {
@@ -149,10 +150,12 @@ const PublicAttendance: React.FC = () => {
       const trimmedInput = opsId.trim().toLowerCase();
       const worker = workers.find(w => {
         if (!w.opsId || !w.fullName) return false;
-        const workerOpsIdLower = w.opsId.toLowerCase();
+        
+        const workerOpsIdLower = w.opsId.trim().toLowerCase();
+        const workerFullNameLower = w.fullName.trim().toLowerCase();
         
         // 1. Check for exact case-insensitive match on OpsID or full name
-        if (workerOpsIdLower === trimmedInput || w.fullName.toLowerCase() === trimmedInput) {
+        if (workerOpsIdLower === trimmedInput || workerFullNameLower === trimmedInput) {
             return true;
         }
 
@@ -168,7 +171,7 @@ const PublicAttendance: React.FC = () => {
       });
       
       if(!worker) {
-          setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");
+          setMessage("OpsID / Nama tidak ditemukan atau status Non-Aktif.");
           setStatus('error');
           return;
       }

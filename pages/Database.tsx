@@ -105,10 +105,10 @@ const Database: React.FC<DatabaseProps> = ({ workers, refreshData }) => {
       })
       .filter(worker => {
         if (searchTerm.trim() === '') return true;
-        const lowercasedSearch = searchTerm.toLowerCase();
+        const lowercasedSearch = searchTerm.trim().toLowerCase();
         return (
-          worker.fullName.toLowerCase().includes(lowercasedSearch) ||
-          worker.opsId.toLowerCase().includes(lowercasedSearch)
+          (worker.fullName || '').trim().toLowerCase().includes(lowercasedSearch) ||
+          (worker.opsId || '').trim().toLowerCase().includes(lowercasedSearch)
         );
       });
   }, [workers, searchTerm, departmentFilter]);
