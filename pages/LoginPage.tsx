@@ -114,249 +114,154 @@ const LoginPage: React.FC = () => {
             />
             {/* Cyber Grid Overlay */}
             <div className="absolute inset-0 opacity-[0.15] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#3b82f6 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }}></div>
-            <div className="absolute inset-0 bg-gradient-to-r from-[#020617] via-[#020617]/50 to-transparent"></div>
-          </div>
-        </div>
-        
-        <div className="relative z-10 w-full max-w-2xl text-center lg:text-left">
-          <div className="inline-block px-4 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-black tracking-[0.4em] uppercase mb-8 backdrop-blur-md">
-            Logistics Infrastructure
-          </div>
-          <h2 className="text-5xl xl:text-7xl font-black text-white leading-[1.05] tracking-tighter">
-            Efisien. Terintegrasi. <br/><span className="text-blue-500">Real-time.</span>
-          </h2>
-          <p className="text-blue-100/40 text-lg font-medium max-w-lg mt-8 leading-relaxed">
-            Sistem manajemen absensi tercanggih bernama <span className="text-blue-400 font-bold">"ABSENIN"</span>, yang berguna untuk pantau kehadiran Daily Worker di ekosistem pergudangan.
-          </p>
-
-          <div className="mt-12 flex gap-10">
-            <div className="flex flex-col">
-              <span className="text-white font-black text-3xl">99.9%</span>
-              <span className="text-blue-100/30 text-[10px] uppercase tracking-widest font-bold mt-1">Uptime System</span>
-            </div>
-            <div className="w-px h-12 bg-white/10"></div>
-            <div className="flex flex-col">
-              <span className="text-white font-black text-3xl">Smart</span>
-              <span className="text-blue-100/30 text-[10px] uppercase tracking-widest font-bold mt-1">Warehouse Monitoring</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="absolute bottom-12 left-16 flex items-center gap-4 z-20">
-          <div className="w-12 h-12 p-2 bg-white/10 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl">
-            <img src={LOGO_URL} alt="Mini Logo" className="w-full h-full object-contain" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-white text-[11px] font-black tracking-[0.2em] uppercase leading-none">ABSENIN</span>
-            <span className="text-blue-500/60 text-[9px] font-bold uppercase tracking-widest mt-1.5">Portal Absensi Industri</span>
           </div>
         </div>
       </div>
 
       {/* RIGHT: Login Form Section */}
-      <div className="w-full lg:w-2/5 flex items-center justify-center p-8 sm:p-20 bg-white relative">
+      <div className="w-full lg:w-2/5 flex flex-col items-center justify-center p-8 sm:p-12">
         <div className="w-full max-w-md">
-          <div className="mb-12 text-center lg:text-left">
-            <div className="flex justify-center lg:justify-start mb-10">
-              <div className="relative">
-                <div className="absolute inset-0 bg-blue-100 rounded-3xl blur-xl opacity-50 scale-150"></div>
-                <div className="relative w-20 h-20 p-3 bg-white rounded-3xl border border-blue-100 shadow-2xl transition-transform hover:scale-110 cursor-pointer flex items-center justify-center">
-                  <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
-                </div>
-              </div>
+          <div className="flex justify-center mb-8">
+            <div className="relative w-24 h-24 p-4 bg-white rounded-3xl border border-blue-100 shadow-2xl flex items-center justify-center">
+              <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-4xl font-black text-gray-900 tracking-tighter">Selamat Datang</h1>
-            <p className="text-gray-500 font-medium mt-3 text-lg leading-relaxed">Silakan masuk menggunakan kredensial administrator Anda.</p>
+          </div>
+
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">Selamat Datang Kembali</h1>
+            <p className="text-gray-500 font-medium mt-2 text-sm">Masuk untuk melanjutkan ke Portal Absensi.</p>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Email Administrator</label>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" /></svg>
-                </div>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-sm font-semibold" 
-                  placeholder="admin@example.com"
-                  required
-                />
-              </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Alamat Email</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="mt-2 w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                placeholder="contoh@email.com"
+              />
             </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Kata Sandi</label>
-                <button type="button" onClick={openForgotModal} className="text-[10px] font-black text-blue-600 uppercase tracking-widest hover:underline">Lupa Sandi?</button>
+            <div>
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Password</label>
+                <button type="button" onClick={openForgotModal} className="text-xs font-bold text-blue-600 hover:underline">
+                  Lupa Password?
+                </button>
               </div>
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-blue-600 transition-colors">
-                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                </div>
-                <input 
-                  type={showPassword ? "text" : "password"} 
+              <div className="relative mt-2">
+                <input
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pl-12 pr-14 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-sm font-semibold" 
-                  placeholder="••••••••"
                   required
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                  placeholder="••••••••"
                 />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-blue-700 transition-colors"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600">
                   {showPassword ? (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a9.97 9.97 0 01-1.563 3.029m-2.201-1.208l-3.289-3.289" /></svg>
                   ) : (
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573 3.007-9.963-7.178z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.274 4.057-5.064 7-9.543 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                   )}
                 </button>
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-1">
-              <label className="flex items-center group cursor-pointer">
-                <div className="relative">
-                  <input 
-                    type="checkbox" 
-                    className="sr-only" 
-                    checked={rememberMe}
-                    onChange={() => setRememberMe(!rememberMe)}
-                  />
-                  <div className={`w-5 h-5 border-2 rounded-md transition-all flex items-center justify-center ${rememberMe ? 'bg-blue-600 border-blue-600 shadow-md shadow-blue-200' : 'bg-gray-50 border-gray-200 group-hover:border-blue-400'}`}>
-                    {rememberMe && (
-                      <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    )}
-                  </div>
-                </div>
-                <span className="ml-3 text-[11px] font-black text-gray-500 uppercase tracking-widest group-hover:text-gray-700 transition-colors">Ingat Saya</span>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="font-medium">Ingat Saya</span>
               </label>
             </div>
 
             {error && (
-              <div className="p-4 bg-red-50 border border-red-100 text-red-600 text-xs rounded-2xl flex items-center gap-3 animate-shake">
-                <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center shrink-0">
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <span className="font-bold">{error}</span>
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-semibold">
+                {error}
               </div>
             )}
 
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl shadow-xl shadow-blue-200 transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed text-xs uppercase tracking-[0.2em]"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-200 transition-all transform active:scale-[0.98] disabled:opacity-70 text-xs uppercase tracking-[0.2em]"
             >
-              {loading ? (
-                <div className="flex items-center justify-center gap-3">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  <span>Autentikasi...</span>
-                </div>
-              ) : 'Masuk Ke Dashboard'}
+              {loading && !error ? 'Memproses...' : 'Masuk'}
             </button>
           </form>
 
-          <div className="my-8 flex items-center">
-              <hr className="w-full border-gray-200" />
-              <span className="px-4 text-[10px] font-black text-gray-400 uppercase tracking-widest shrink-0">atau</span>
-              <hr className="w-full border-gray-200" />
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500 font-medium">
+                Atau lanjutkan dengan
+              </span>
+            </div>
           </div>
-
-          <button
+          
+          <div>
+            <button
               type="button"
               onClick={handleGoogleLogin}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 py-4 bg-white border-2 border-gray-200 rounded-2xl hover:bg-gray-50 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-gray-400 transition-all text-sm font-bold text-gray-700 disabled:opacity-70 disabled:cursor-not-allowed"
-          >
+              className="w-full inline-flex justify-center items-center py-3 px-4 border border-gray-300 rounded-xl shadow-sm bg-white text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
               <GoogleIcon />
-              <span>Masuk dengan Google</span>
-          </button>
-
-          <div className="mt-16 pt-8 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-            <p className="text-gray-400 text-[10px] uppercase font-black tracking-widest">
-              &copy; 2025 ABSENIN
-            </p>
-            <div className="flex gap-6">
-              <a href="#" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">Bantuan</a>
-              <a href="#" className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors">Privasi</a>
-            </div>
+              <span className="ml-3">Masuk dengan Google</span>
+            </button>
           </div>
+
         </div>
       </div>
-
-      <style>{`
-        @keyframes slow-zoom {
-          0%, 100% { transform: scale(1.05); }
-          50% { transform: scale(1.15); }
-        }
-        .animate-slow-zoom {
-          animation: slow-zoom 20s ease-in-out infinite;
-        }
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-4px); }
-          75% { transform: translateX(4px); }
-        }
-        .animate-shake {
-          animation: shake 0.2s ease-in-out 0s 2;
-        }
-      `}</style>
     </div>
-    
-    <Modal isOpen={isForgotModalOpen} onClose={() => setIsForgotModalOpen(false)} title="Reset Password" size="md">
-        <form onSubmit={handleForgotPassword} className="space-y-6">
+    <Modal isOpen={isForgotModalOpen} onClose={() => setIsForgotModalOpen(false)} title="Reset Password" size="md" scrollable={false}>
+        <form onSubmit={handleForgotPassword} className="space-y-4">
             <p className="text-sm text-gray-600">
-                Masukkan alamat email Anda yang terdaftar. Kami akan mengirimkan link untuk mengatur ulang password Anda.
+                Masukkan alamat email Anda. Kami akan mengirimkan link untuk mengatur ulang password Anda.
             </p>
-            
-            {forgotSuccess ? (
-                <div className="p-4 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm font-semibold">
-                    {forgotSuccess}
-                </div>
-            ) : (
-                <>
-                    {forgotError && (
-                        <div className="p-4 bg-red-50 text-red-700 border border-red-200 rounded-lg text-sm font-semibold">
-                            {forgotError}
-                        </div>
-                    )}
-                    <div>
-                        <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700 mb-2">Alamat Email</label>
-                        <input
-                            type="email"
-                            id="forgot-email"
-                            value={forgotEmail}
-                            onChange={(e) => setForgotEmail(e.target.value)}
-                            required
-                            className="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder="anda@email.com"
-                        />
-                    </div>
-
-                    <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={() => setIsForgotModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 font-medium transition-colors">
-                            Batal
-                        </button>
-                        <button type="submit" disabled={forgotLoading} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold transition-colors disabled:opacity-50 flex items-center gap-2">
-                            {forgotLoading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
-                            {forgotLoading ? 'Mengirim...' : 'Kirim Link Reset'}
-                        </button>
-                    </div>
-                </>
-            )}
+            <div>
+                <label htmlFor="forgot-email" className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                    type="email"
+                    id="forgot-email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="you@example.com"
+                />
+            </div>
+            {forgotError && <p className="text-sm text-red-600">{forgotError}</p>}
+            {forgotSuccess && <p className="text-sm text-green-600">{forgotSuccess}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setIsForgotModalOpen(false)} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300">Batal</button>
+                <button type="submit" disabled={forgotLoading} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50">
+                    {forgotLoading ? 'Mengirim...' : 'Kirim Link Reset'}
+                </button>
+            </div>
         </form>
     </Modal>
+    <style>{`
+        @keyframes slow-zoom {
+          from { transform: scale(1.05); }
+          to { transform: scale(1.15); }
+        }
+        .animate-slow-zoom {
+          animation: slow-zoom 20s ease-in-out infinite alternate;
+        }
+    `}</style>
     </>
   );
 };
 
+// FIX: Add default export for LoginPage component
 export default LoginPage;

@@ -34,7 +34,7 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
 });
 
 const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpenSessionId }) => {
-  const [activeSession, setActiveSession] = useLocalStorage<AttendanceSession | null>('activePublicSession', null);
+  const [activeSession, setActiveSession] = useLocalStorage<AttendanceSession | null>('activeAbseninSession', null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingSession, setIsLoadingSession] = useState(true);

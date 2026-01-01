@@ -56,7 +56,7 @@ const WelcomePage: React.FC<WelcomePageProps> = ({ onEnter }) => {
       </div>
 
       <div className="absolute bottom-8 text-center">
-        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ABSENIN Core</p>
+        <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Powered by ABSENIN</p>
       </div>
 
       <style>{`

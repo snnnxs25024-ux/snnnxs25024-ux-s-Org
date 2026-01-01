@@ -1,6 +1,6 @@
 {
   "name": "ABSENIN",
-  "description": "Sistem Manajemen Absensi Terpadu. Efisien, Real-time, dan Futuristik.",
+  "description": "Aplikasi Absensi Sederhana. Efisien, Real-time, dan Terintegrasi.",
   "requestFramePermissions": [
     "camera"
   ]

@@ -169,7 +169,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
             <div className="flex items-center justify-between bg-gray-50 p-2 rounded-xl border border-gray-100">
                <div className="flex items-center gap-3 overflow-hidden">
                  <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center p-1 overflow-hidden shrink-0">
-                   <img src={LOGO_URL} alt="Logo" className="w-full h-full object-contain" />
+                   <img src={LOGO_URL} alt="ABSENIN Logo" className="w-full h-full object-contain" />
                  </div>
                  <div className="overflow-hidden">
                     <p className="text-xs font-bold text-gray-700 truncate">Admin</p>

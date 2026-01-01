@@ -15,12 +15,8 @@ const PublicAttendance: React.FC = () => {
   const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
 
-  const statusRef = useRef(status);
   const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    statusRef.current = status;
-  }, [status]);
-
+  
   useEffect(() => {
     const path = window.location.pathname;
     const parts = path.split('/');
@@ -64,13 +60,20 @@ const PublicAttendance: React.FC = () => {
             return;
         }
         
-        // Use an RPC function for secure public access to worker data
-        const { data: workerData, error: workerError } = await supabase.rpc('get_public_workers');
+        // FIX: Use a direct query instead of the potentially buggy/incomplete RPC function.
+        // This ensures all 'Active' workers are fetched, mirroring the admin panel's logic.
+        // NOTE: Ensure Row Level Security (RLS) on the 'workers' table allows read access
+        // for anonymous users on rows where status = 'Active'.
+        const { data: workerData, error: workerError } = await supabase
+            .from('workers')
+            .select('id, ops_id, full_name, department, status')
+            .eq('status', 'Active');
+
 
         if (workerError) {
-            console.error("RPC Error:", workerError);
+            console.error("Worker fetch error:", workerError);
             setStatus('error');
-            setMessage('Gagal memuat daftar karyawan. (Error: RPC)');
+            setMessage('Gagal memuat daftar karyawan. (Error: DB)');
             setDataLoading(false);
             return;
         }
@@ -94,7 +97,9 @@ const PublicAttendance: React.FC = () => {
         setDataLoading(false);
     };
 
-    fetchData();
+    if(id) {
+        fetchData();
+    }
 
     const channel = supabase.channel(`public_session_${id}`)
         .on(
@@ -103,9 +108,10 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as any;
                 if (newSession.status === 'CLOSED') {
-                    if (statusRef.current !== 'success' && statusRef.current !== 'buffer') {
-                        setStatus('closed');
-                    }
+                    // FIX: Session status is the source of truth. Always close the page if the session is closed.
+                    // The previous conditional logic prevented this screen from updating for users
+                    // who had already successfully registered.
+                    setStatus('closed');
                 }
             }
         )
