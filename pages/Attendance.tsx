@@ -17,6 +17,15 @@ interface AttendanceProps {
   setActiveRecords: React.Dispatch<React.SetStateAction<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>>;
 }
 
+const divisionToDepartmentMap: { [key: string]: Worker['department'] | Worker['department'][] } = {
+    'ASM2': 'SOC Operator',
+    'CACHE': 'Cache',
+    'INVENTORY': 'Inventory',
+    'RETURN': 'Return',
+    'TP SUNTER 1': ['SOC Operator', 'Cache', 'Return', 'Inventory'],
+    'TP SUNTER 2': ['SOC Operator', 'Cache', 'Return', 'Inventory'],
+};
+
 // Fallbacks if DB is empty
 const defaultShiftIds = [
     'SOCSTROPS0009', 'SOCSTROPS0110', 'SOCSTROPS0211', 'SOCSTROPS0312', 'SOCSTROPS0413', 'SOCSTROPS0514',
@@ -169,15 +178,19 @@ const Attendance: React.FC<AttendanceProps> = ({
           return;
       }
 
-      // VALIDATION: Check if worker's department matches the session's division
-      const { data: divisions } = await supabase.from('master_data').select('value').eq('category', 'DIVISION');
-      const divisionList = divisions?.map(d => d.value) || divisionOpts;
-
-      if (divisionList.includes(activeSession.division) && worker.department !== activeSession.division) {
-          setError(`Worker ${worker.fullName} (Dept: ${worker.department}) tidak diizinkan untuk sesi Divisi ${activeSession.division}.`);
-          setOpsIdInput('');
-          return;
+      // VALIDATION: Check Division permission using the flexible map
+      const allowedDepartment = divisionToDepartmentMap[activeSession.division];
+      if (allowedDepartment) {
+          const isAllowed = Array.isArray(allowedDepartment) 
+              ? allowedDepartment.includes(worker.department) 
+              : worker.department === allowedDepartment;
+          if (!isAllowed) {
+              setError(`Worker ${worker.fullName} (${worker.department}) is not allowed in ${activeSession.division} session.`);
+              setOpsIdInput('');
+              return;
+          }
       }
+      // If division is not in map, it's a new dynamic one, so we allow anyone.
 
       // VALIDATION 1: Check Local Buffer (Duplicate in Current Session)
       if (activeRecords.some(r => r.opsId === worker.opsId)) {
