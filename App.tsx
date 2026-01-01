@@ -286,7 +286,11 @@ const App: React.FC = () => {
                   setActiveRecords={setActiveRecords}
                />;
       case 'Open List':
-          return <OpenList workers={workers} />;
+          return <OpenList 
+                    workers={workers} 
+                    setCurrentPage={setCurrentPage}
+                    setAutoOpenSessionId={setAutoOpenSessionId}
+                 />;
       case 'Data Base':
         return <Database workers={workers} refreshData={fetchData} />;
       case 'Pengaturan':

@@ -258,7 +258,9 @@ const PublicAttendance: React.FC = () => {
       return <div className="p-12 text-center text-gray-600 mt-10 animate-pulse font-black uppercase tracking-[0.3em] text-[10px]">Initializing Session...</div>;
   }
   
-  if(status === 'error' || !session) {
+  // FIX: Only return early if the session itself could not be loaded.
+  // Form-level errors will be handled within the main render block.
+  if(!session) {
       return <div className="p-8 text-center text-red-600 mt-10 font-bold uppercase tracking-widest text-xs">Error: {message || 'Sesi tidak dapat dimuat.'}</div>;
   }
 

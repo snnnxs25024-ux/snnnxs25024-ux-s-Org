@@ -8,9 +8,12 @@ import DeleteIcon from '../components/icons/DeleteIcon';
 import { useToast } from '../hooks/useToast';
 import Modal from '../components/Modal';
 import { playSound } from '../utils/sound';
+import { Page } from '../App';
 
 interface OpenListProps {
   workers: Worker[];
+  setCurrentPage: (page: Page) => void;
+  setAutoOpenSessionId: (id: string | null) => void;
 }
 
 // Fallbacks
@@ -29,7 +32,7 @@ const defaultShiftTimes = Array.from({ length: 24 }, (_, i) => {
     return `${startTime} - ${endTime}`;
 });
 
-const OpenList: React.FC<OpenListProps> = ({ workers }) => {
+const OpenList: React.FC<OpenListProps> = ({ workers, setCurrentPage, setAutoOpenSessionId }) => {
   const [activeSession, setActiveSession] = useState<AttendanceSession | null>(null);
   const [liveRecords, setLiveRecords] = useState<AttendanceRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -188,11 +191,11 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         { event: 'UPDATE', schema: 'public', table: 'attendance_sessions', filter: `id=eq.${activeSession.id}` },
         (payload) => {
             const updatedSession = payload.new as any;
-            // Only act if the session we are listening to is closed.
             if (updatedSession.status === 'CLOSED' && activeSession && updatedSession.id === activeSession.id) {
                  showToast('Sesi ditutup otomatis karena kuota penuh. Mengalihkan...', { type: 'info', title: 'Sesi Ditutup Otomatis' });
-                 // Redirect immediately to the dashboard to manage the now-closed session.
-                 window.location.href = `/?page=Dashboard&manageId=${updatedSession.id}`;
+                 setActiveSession(null);
+                 setAutoOpenSessionId(updatedSession.id);
+                 setCurrentPage('Dashboard');
             }
         }
       )
@@ -201,7 +204,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     return () => {
         supabase.removeChannel(channel);
     };
-  }, [activeSession?.id, workers, showToast]);
+  }, [activeSession?.id, workers, showToast, setCurrentPage, setAutoOpenSessionId]);
 
   const handleCreateSession = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -211,7 +214,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
     const formData = new FormData(e.currentTarget);
     const newSessionId = uuidv4();
     
-    // Object for database insert, using snake_case for column names
     const sessionDbData = {
       id: newSessionId,
       date: formData.get('sessionDate') as string,
@@ -233,7 +235,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       setIsLoading(false);
       showToast(`Gagal membuat link: ${insertError.message}`, { type: 'error', title: 'Error' });
     } else {
-      // Create object for local state, mapping back to camelCase
       const sessionState: AttendanceSession = {
           id: sessionDbData.id,
           date: sessionDbData.date,
@@ -255,7 +256,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
   const handleCloseSession = async () => {
       if (!activeSession) return;
       setIsCloseConfirmOpen(false);
-      const sessionId = activeSession.id; // Store ID before async operation
+      const sessionId = activeSession.id; 
       
       const { error } = await supabase.from('attendance_sessions').update({ status: 'CLOSED' }).eq('id', sessionId);
       
@@ -265,9 +266,9 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
       }
       
       showToast('Sesi publik ditutup. Mengalihkan ke Dashboard...', { type: 'info', title: 'Sesi Ditutup' });
-      
-      // Redirect AFTER the await completes. The page reload will reset state naturally.
-      window.location.href = `/?page=Dashboard&manageId=${sessionId}`;
+      setActiveSession(null);
+      setAutoOpenSessionId(sessionId);
+      setCurrentPage('Dashboard');
   };
 
   const getPublicLink = () => {
@@ -288,7 +289,7 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
         showToast(`Gagal menghapus: ${error.message}`, { type: 'error', title: 'Error' });
       } else {
         showToast('Data berhasil dihapus dari sesi ini.', { type: 'success', title: 'Berhasil Dihapus' });
-        setLiveRecords(prev => prev.filter(r => r.id !== recordId));
+        // The real-time subscription will handle removing the record from state
       }
   };
 
@@ -339,7 +340,6 @@ const OpenList: React.FC<OpenListProps> = ({ workers }) => {
                         <input type="number" name="planMpp" min="1" placeholder="Masukkan angka kuota (misal: 50)" required className="w-full bg-gray-50 border border-gray-300 rounded-lg p-2.5 focus:ring-2 focus:ring-blue-500" />
                     </div>
                     
-                    {/* TOGGLE AUTO CLOSE */}
                     <div className="md:col-span-2 flex items-center justify-between p-4 bg-blue-50 rounded-xl border border-blue-100">
                         <div>
                             <p className="font-black text-blue-900 text-xs uppercase tracking-widest">Tutup Sesi Otomatis</p>
