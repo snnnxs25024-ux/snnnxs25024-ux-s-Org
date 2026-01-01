@@ -146,7 +146,26 @@ const PublicAttendance: React.FC = () => {
       
       setStatus('loading');
 
-      const worker = workers.find(w => w.opsId && w.opsId.toLowerCase() === opsId.trim().toLowerCase());
+      const trimmedOpsId = opsId.trim().toLowerCase();
+      const worker = workers.find(w => {
+        if (!w.opsId) return false;
+        const workerOpsIdLower = w.opsId.toLowerCase();
+        
+        // 1. Check for a direct, exact match (e.g., user types "ops8030")
+        if (workerOpsIdLower === trimmedOpsId) {
+            return true;
+        }
+
+        // 2. If the input is purely numeric, check if it matches the numeric part of the OpsID (e.g., user types "8030")
+        if (/^\d+$/.test(trimmedOpsId)) {
+            const numericPartOfWorkerOpsId = workerOpsIdLower.replace(/[^0-9]/g, '');
+            if (numericPartOfWorkerOpsId === trimmedOpsId) {
+                return true;
+            }
+        }
+        
+        return false;
+      });
       
       if(!worker) {
           setMessage("OpsID tidak ditemukan atau Non-Aktif (Cek ejaan/status).");

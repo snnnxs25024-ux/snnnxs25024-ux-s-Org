@@ -199,22 +199,125 @@ const App: React.FC = () => {
   // Real-time data synchronization
   useEffect(() => {
     if (!session || isPublicMode) return;
+    
+    // --- Granular updates for frequently changing attendance data ---
+    const handleAttendanceChanges = (payload: any) => {
+      const workerMap = new Map<string, Worker>();
+      // Use the ref which is always up-to-date with the 'workers' state
+      workersRef.current.forEach(worker => {
+          if (worker.id) {
+              workerMap.set(worker.id, worker);
+          }
+      });
 
-    // A simple and robust way to keep data in sync is to refetch on any change.
-    const subscription = supabase
-      .channel('any-db-changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_sessions' }, () => {
-        fetchData();
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, () => {
-        fetchData();
-      })
+      const enrichRecord = (record: any): AttendanceRecord => {
+          const worker = workerMap.get(record.worker_id);
+          return {
+              id: record.id,
+              workerId: record.worker_id,
+              opsId: worker?.opsId || 'N/A',
+              fullName: worker?.fullName || 'Unknown',
+              timestamp: record.timestamp,
+              scan_timestamp: record.scan_timestamp,
+              checkout_timestamp: record.checkout_timestamp,
+              manual_status: record.manual_status,
+              is_takeout: record.is_takeout,
+              is_arrived: record.is_arrived ?? true,
+          };
+      };
+      
+      setAttendanceHistory(currentHistory => {
+        let newHistory = [...currentHistory];
+        
+        // Handle Session Changes
+        if (payload.table === 'attendance_sessions') {
+            const sessionIndex = newHistory.findIndex(s => s.id === (payload.new?.id || payload.old?.id));
+
+            if (payload.eventType === 'INSERT') {
+                if (sessionIndex > -1) return newHistory; // Already exists
+                const newSessionData = payload.new;
+                const newSession: AttendanceSession = {
+                    id: newSessionData.id, date: newSessionData.date, division: newSessionData.division,
+                    shiftTime: newSessionData.shift_time, shiftId: newSessionData.shift_id,
+                    planMpp: newSessionData.plan_mpp, status: newSessionData.status,
+                    session_type: newSessionData.session_type, auto_close: newSessionData.auto_close,
+                    records: [],
+                };
+                return [newSession, ...newHistory];
+            } else if (payload.eventType === 'UPDATE') {
+                if (sessionIndex > -1) {
+                    const updatedSessionData = payload.new;
+                    newHistory[sessionIndex] = {
+                        ...newHistory[sessionIndex], // keep records
+                        date: updatedSessionData.date, division: updatedSessionData.division,
+                        shiftTime: updatedSessionData.shift_time, shiftId: updatedSessionData.shift_id,
+                        planMpp: updatedSessionData.plan_mpp, status: updatedSessionData.status,
+                        session_type: updatedSessionData.session_type, auto_close: updatedSessionData.auto_close,
+                    };
+                    return [...newHistory];
+                }
+            } else if (payload.eventType === 'DELETE') {
+                return newHistory.filter(s => s.id !== payload.old.id);
+            }
+        }
+
+        // Handle Record Changes
+        if (payload.table === 'attendance_records') {
+            const sessionId = payload.new?.session_id || payload.old?.session_id;
+            if (!sessionId) return newHistory;
+
+            const sessionIndex = newHistory.findIndex(s => s.id === sessionId);
+            if (sessionIndex === -1) return newHistory;
+
+            const targetSession = { ...newHistory[sessionIndex] };
+            let updatedRecords = [...targetSession.records];
+
+            if (payload.eventType === 'INSERT') {
+                const newRecord = enrichRecord(payload.new);
+                if (!updatedRecords.some(r => r.id === newRecord.id)) {
+                  updatedRecords.push(newRecord);
+                }
+            } else if (payload.eventType === 'UPDATE') {
+                const updatedRecord = enrichRecord(payload.new);
+                const recordIndex = updatedRecords.findIndex(r => r.id === updatedRecord.id);
+                if (recordIndex > -1) {
+                    updatedRecords[recordIndex] = updatedRecord;
+                } else {
+                    updatedRecords.push(updatedRecord);
+                }
+            } else if (payload.eventType === 'DELETE') {
+                updatedRecords = updatedRecords.filter(r => r.id !== payload.old.id);
+            }
+            
+            targetSession.records = updatedRecords;
+            newHistory[sessionIndex] = targetSession;
+            return [...newHistory];
+        }
+
+        return currentHistory;
+      });
+    };
+    
+    // Channel for frequent data
+    const attendanceChannel = supabase
+      .channel('attendance-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_sessions' }, handleAttendanceChanges)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance_records' }, handleAttendanceChanges)
+      .subscribe();
+      
+    // Channel for foundational data that triggers a full refetch
+    const foundationalDataChannel = supabase
+      .channel('foundational-db-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workers' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'master_data' }, () => fetchData())
       .subscribe();
 
     return () => {
-      supabase.removeChannel(subscription);
+      supabase.removeChannel(attendanceChannel);
+      supabase.removeChannel(foundationalDataChannel);
     };
   }, [session, isPublicMode, fetchData]);
+
 
   // Fungsi untuk membersihkan state auto-open setelah digunakan
   const clearAutoOpenSessionId = () => {
