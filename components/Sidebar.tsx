@@ -3,9 +3,8 @@ import React, { useState } from 'react';
 import { Page } from '../App';
 import { supabase } from '../lib/supabaseClient';
 import DashboardIcon from './icons/DashboardIcon';
-import AttendanceIcon from './icons/AttendanceIcon';
+import AddIcon from './icons/AddIcon';
 import DatabaseIcon from './icons/DatabaseIcon';
-import LinkIcon from './icons/LinkIcon';
 import SettingsIcon from './icons/SettingsIcon';
 import Modal from './Modal';
 import { useToast } from '../hooks/useToast';
@@ -81,8 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
     {
       title: 'Operasional',
       items: [
-        { label: 'Absensi' as Page, icon: <AttendanceIcon /> },
-        { label: 'Open List' as Page, icon: <LinkIcon /> },
+        { label: 'Buat Sesi' as Page, icon: <AddIcon className="h-6 w-6" /> },
       ]
     },
     {
