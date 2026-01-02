@@ -2,24 +2,27 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
-import CreateSession from './pages/CreateSession';
+import Attendance from './pages/Attendance';
 import Database from './pages/Database';
+import OpenList from './pages/OpenList';
 import PublicAttendance from './pages/PublicAttendance';
 import Settings from './pages/Settings';
 import LoginPage from './pages/LoginPage';
+import WelcomePage from './pages/WelcomePage';
 import UpdatePasswordPage from './pages/UpdatePasswordPage';
 import { Worker, AttendanceSession, AttendanceRecord } from './types';
 import { supabase } from './lib/supabaseClient';
 import HamburgerIcon from './components/icons/HamburgerIcon';
 import { ToastProvider } from './contexts/ToastContext';
 
-export type Page = 'Dashboard' | 'Buat Sesi' | 'Data Base' | 'Pengaturan';
+export type Page = 'Dashboard' | 'Absensi' | 'Open List' | 'Data Base' | 'Pengaturan';
 type AuthAction = 'IDLE' | 'RECOVERY';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authAction, setAuthAction] = useState<AuthAction>('IDLE');
+  const [showWelcome, setShowWelcome] = useState(true);
   const [currentPage, setCurrentPage] = useState<Page>('Dashboard');
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [attendanceHistory, setAttendanceHistory] = useState<AttendanceSession[]>([]);
@@ -77,6 +80,9 @@ const App: React.FC = () => {
         }
     }
   }, []);
+
+  const [activeSession, setActiveSession] = useState<Omit<AttendanceSession, 'records' | 'id'> | null>(null);
+  const [activeRecords, setActiveRecords] = useState<Omit<AttendanceRecord, 'id' | 'checkout_timestamp' | 'manual_status' | 'is_takeout'>[]>([]);
 
   const fetchData = useCallback(async () => {
     if (!session) return;
@@ -340,7 +346,11 @@ const App: React.FC = () => {
         </div>
       );
   }
-  
+
+  if (!session && showWelcome) {
+    return <WelcomePage onEnter={() => setShowWelcome(false)} />;
+  }
+
   if (!session) {
     return <LoginPage />;
   }
@@ -369,14 +379,21 @@ const App: React.FC = () => {
                   autoOpenSessionId={autoOpenSessionId}
                   clearAutoOpenSessionId={clearAutoOpenSessionId}
                />;
-      case 'Buat Sesi':
-        return <CreateSession 
+      case 'Absensi':
+        return <Attendance 
                   workers={workers} 
                   refreshData={fetchData}
-                  setCurrentPage={setCurrentPage}
-                  setAutoOpenSessionId={setAutoOpenSessionId}
-                  attendanceHistory={attendanceHistory}
+                  activeSession={activeSession}
+                  setActiveSession={setActiveSession}
+                  activeRecords={activeRecords}
+                  setActiveRecords={setActiveRecords}
                />;
+      case 'Open List':
+          return <OpenList 
+                    workers={workers} 
+                    setCurrentPage={setCurrentPage}
+                    setAutoOpenSessionId={setAutoOpenSessionId}
+                 />;
       case 'Data Base':
         return <Database workers={workers} refreshData={fetchData} />;
       case 'Pengaturan':
