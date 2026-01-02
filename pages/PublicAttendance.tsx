@@ -31,7 +31,7 @@ const PublicAttendance: React.FC = () => {
     }
 
     // --- REAL-TIME SUBSCRIPTION ---
-    // This must always be active to listen for session closure events.
+    // This must always be active to listen for session closure events, regardless of lock status.
     const channel = supabase.channel(`public_session_${id}`)
         .on(
             'postgres_changes',
