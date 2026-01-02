@@ -215,10 +215,16 @@ const PublicAttendance: React.FC = () => {
           return;
       }
 
-      const { count } = await supabase
+      const { count, error: countError } = await supabase
         .from('attendance_records')
         .select('id', { count: 'exact', head: true })
         .eq('session_id', session.id);
+      
+      if (countError) {
+          setMessage("Gagal memvalidasi kuota. Coba lagi.");
+          setStatus('error');
+          return;
+      }
       
       const currentCount = count || 0;
       let manualStatus = null;
@@ -232,7 +238,7 @@ const PublicAttendance: React.FC = () => {
       const shiftStartTime = session.shiftTime.split(' - ')[0];
       const officialTimestamp = new Date(session.date + 'T' + shiftStartTime).toISOString();
       
-      const { error } = await supabase.from('attendance_records').insert({
+      const { error: insertError } = await supabase.from('attendance_records').insert({
           session_id: session.id,
           worker_id: worker.id,
           timestamp: officialTimestamp,
@@ -241,15 +247,20 @@ const PublicAttendance: React.FC = () => {
           is_arrived: false 
       });
 
-      if(error) {
+      if(insertError) {
           setMessage("Gagal menyimpan data. Coba lagi.");
           setStatus('error');
       } else {
-          const newTotalCount = currentCount + 1;
-          if (session.auto_close && newTotalCount >= session.planMpp) {
-              await supabase.from('attendance_sessions')
-                .update({ status: 'CLOSED' })
-                .eq('id', session.id);
+          // If auto-close is enabled, call a secure RPC function to check and close the session if full.
+          // This is done on the server-side to bypass RLS limitations for the public 'anon' user.
+          if (session.auto_close) {
+              supabase.rpc('close_session_if_full', { p_session_id: session.id }).then(({ error: rpcError }) => {
+                  if (rpcError) {
+                      // We log this for debugging but don't show an error to the user,
+                      // as their attendance was successfully recorded.
+                      console.error('Error calling RPC to auto-close session:', rpcError);
+                  }
+              });
           }
 
           if (sessionId) {

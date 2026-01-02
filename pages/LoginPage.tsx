@@ -116,6 +116,15 @@ const LoginPage: React.FC = () => {
             <div className="absolute inset-0 opacity-[0.15] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#3b82f6 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }}></div>
           </div>
         </div>
+        {/* Text content overlay */}
+        <div className="relative z-10 text-center text-white animate-fade-in-up">
+            <h1 className="text-6xl font-black tracking-tighter" style={{ textShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+                ABSENIN
+            </h1>
+            <p className="mt-4 text-lg font-medium text-blue-200 tracking-wider" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.5)' }}>
+                Portal Absensi Terintegrasi
+            </p>
+        </div>
       </div>
 
       {/* RIGHT: Login Form Section */}
@@ -257,6 +266,13 @@ const LoginPage: React.FC = () => {
         }
         .animate-slow-zoom {
           animation: slow-zoom 20s ease-in-out infinite alternate;
+        }
+        @keyframes fade-in-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fade-in-up 0.8s ease-out forwards;
         }
     `}</style>
     </>
