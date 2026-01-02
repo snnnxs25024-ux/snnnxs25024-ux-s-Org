@@ -22,85 +22,16 @@ const PublicAttendance: React.FC = () => {
     const parts = path.split('/');
     const id = parts[parts.length - 1];
     setSessionId(id);
-
-    const lockKey = `absenin_attended_${id}`;
-    if (localStorage.getItem(lockKey)) {
-        setStatus('locked');
+    
+    if (!id) {
         setDataLoading(false);
+        setStatus('error');
+        setMessage('Sesi tidak ditemukan atau URL tidak valid.');
         return;
     }
-    
-    const fetchData = async () => {
-        setDataLoading(true);
-        const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
-        
-        if (sessionError || !sessionData) {
-            setStatus('error');
-            setMessage('Sesi tidak ditemukan atau tidak valid.');
-            setDataLoading(false);
-            return;
-        }
 
-        const sessionState: AttendanceSession = {
-            id: sessionData.id,
-            date: sessionData.date,
-            division: sessionData.division,
-            shiftTime: sessionData.shift_time,
-            shiftId: sessionData.shift_id,
-            planMpp: sessionData.plan_mpp,
-            status: sessionData.status,
-            session_type: sessionData.session_type,
-            auto_close: sessionData.auto_close,
-            records: []
-        };
-        setSession(sessionState);
-        if (sessionData.status === 'CLOSED') {
-            setStatus('closed');
-            setDataLoading(false);
-            return;
-        }
-        
-        // FIX: Use a direct query instead of the potentially buggy/incomplete RPC function.
-        // This ensures all 'Active' workers are fetched, mirroring the admin panel's logic.
-        // NOTE: Ensure Row Level Security (RLS) on the 'workers' table allows read access
-        // for anonymous users on rows where status = 'Active'.
-        const { data: workerData, error: workerError } = await supabase
-            .from('workers')
-            .select('id, ops_id, full_name, department, status')
-            .eq('status', 'Active');
-
-
-        if (workerError) {
-            console.error("Worker fetch error:", workerError);
-            setStatus('error');
-            setMessage('Gagal memuat daftar karyawan. (Error: DB)');
-            setDataLoading(false);
-            return;
-        }
-        
-        if (!workerData || workerData.length === 0) {
-            setStatus('error');
-            setMessage('Tidak dapat mengambil daftar karyawan. Harap hubungi admin untuk memeriksa konfigurasi.');
-            setDataLoading(false);
-            return;
-        }
-
-        const typedWorkers: Worker[] = workerData.map((w: any) => ({
-            id: w.id,
-            opsId: w.ops_id,
-            fullName: w.full_name,
-            department: w.department,
-            status: w.status,
-            nik: '', phone: '', contractType: 'Daily Worker Vendor', createdAt: '',
-        }));
-        setWorkers(typedWorkers);
-        setDataLoading(false);
-    };
-
-    if(id) {
-        fetchData();
-    }
-
+    // --- REAL-TIME SUBSCRIPTION ---
+    // This must always be active to listen for session closure events.
     const channel = supabase.channel(`public_session_${id}`)
         .on(
             'postgres_changes',
@@ -108,15 +39,87 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as any;
                 if (newSession.status === 'CLOSED') {
-                    // FIX: Session status is the source of truth. Always close the page if the session is closed.
-                    // The previous conditional logic prevented this screen from updating for users
-                    // who had already successfully registered.
+                    // This is the source of truth. If the session is closed, all clients must update.
                     setStatus('closed');
                 }
             }
         )
         .subscribe();
 
+    // --- INITIAL DATA FETCH & DEVICE LOCK CHECK ---
+    const lockKey = `absenin_attended_${id}`;
+    if (localStorage.getItem(lockKey)) {
+        // Device is locked. Show locked screen but keep the listener active.
+        setStatus('locked');
+        setDataLoading(false);
+    } else {
+        // Device is not locked. Proceed to fetch data for attendance.
+        const fetchData = async () => {
+            setDataLoading(true);
+            const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
+            
+            if (sessionError || !sessionData) {
+                setStatus('error');
+                setMessage('Sesi tidak ditemukan atau tidak valid.');
+                setDataLoading(false);
+                return;
+            }
+
+            const sessionState: AttendanceSession = {
+                id: sessionData.id,
+                date: sessionData.date,
+                division: sessionData.division,
+                shiftTime: sessionData.shift_time,
+                shiftId: sessionData.shift_id,
+                planMpp: sessionData.plan_mpp,
+                status: sessionData.status,
+                session_type: sessionData.session_type,
+                auto_close: sessionData.auto_close,
+                records: []
+            };
+            setSession(sessionState);
+            if (sessionData.status === 'CLOSED') {
+                setStatus('closed');
+                setDataLoading(false);
+                return;
+            }
+            
+            const { data: workerData, error: workerError } = await supabase
+                .from('workers')
+                .select('id, ops_id, full_name, department, status')
+                .eq('status', 'Active');
+
+            if (workerError) {
+                console.error("Worker fetch error:", workerError);
+                setStatus('error');
+                setMessage('Gagal memuat daftar karyawan. (Error: DB)');
+                setDataLoading(false);
+                return;
+            }
+            
+            if (!workerData || workerData.length === 0) {
+                setStatus('error');
+                setMessage('Tidak dapat mengambil daftar karyawan. Harap hubungi admin untuk memeriksa konfigurasi.');
+                setDataLoading(false);
+                return;
+            }
+
+            const typedWorkers: Worker[] = workerData.map((w: any) => ({
+                id: w.id,
+                opsId: w.ops_id,
+                fullName: w.full_name,
+                department: w.department,
+                status: w.status,
+                nik: '', phone: '', contractType: 'Daily Worker Vendor', createdAt: '',
+            }));
+            setWorkers(typedWorkers);
+            setDataLoading(false);
+        };
+
+        fetchData();
+    }
+
+    // Cleanup function to remove the channel subscription when the component unmounts.
     return () => {
         supabase.removeChannel(channel);
     };
@@ -286,9 +289,7 @@ const PublicAttendance: React.FC = () => {
       return <div className="p-12 text-center text-gray-600 mt-10 animate-pulse font-black uppercase tracking-[0.3em] text-[10px]">Initializing Session...</div>;
   }
   
-  // FIX: Only return early if the session itself could not be loaded.
-  // Form-level errors will be handled within the main render block.
-  if(!session) {
+  if(!session && status === 'error') {
       return <div className="p-8 text-center text-red-600 mt-10 font-bold uppercase tracking-widest text-xs">Error: {message || 'Sesi tidak dapat dimuat.'}</div>;
   }
 
@@ -325,8 +326,8 @@ const PublicAttendance: React.FC = () => {
           <div className="p-8">
               <div className="mb-8 text-center border-b border-gray-100 pb-6">
                   <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-2">Live Session</p>
-                  <h2 className="text-xl font-black text-gray-800 uppercase tracking-tight">{session.division}</h2>
-                  <p className="text-gray-500 font-bold text-sm mt-1">{session.date} | {session.shiftTime}</p>
+                  <h2 className="text-xl font-black text-gray-800 uppercase tracking-tight">{session?.division}</h2>
+                  <p className="text-gray-500 font-bold text-sm mt-1">{session?.date} | {session?.shiftTime}</p>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-6">
