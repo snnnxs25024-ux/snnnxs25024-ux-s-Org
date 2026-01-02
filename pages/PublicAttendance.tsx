@@ -31,7 +31,7 @@ const PublicAttendance: React.FC = () => {
     }
 
     // --- REAL-TIME SUBSCRIPTION ---
-    // This must always be active to listen for session closure events, regardless of lock status.
+    // This must always be active to listen for session closure events.
     const channel = supabase.channel(`public_session_${id}`)
         .on(
             'postgres_changes',
@@ -46,78 +46,82 @@ const PublicAttendance: React.FC = () => {
         )
         .subscribe();
 
-    // --- INITIAL DATA FETCH & DEVICE LOCK CHECK ---
-    const lockKey = `absenin_attended_${id}`;
-    if (localStorage.getItem(lockKey)) {
-        // Device is locked. Show locked screen but keep the listener active.
-        setStatus('locked');
-        setDataLoading(false);
-    } else {
-        // Device is not locked. Proceed to fetch data for attendance.
-        const fetchData = async () => {
-            setDataLoading(true);
-            const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
-            
-            if (sessionError || !sessionData) {
-                setStatus('error');
-                setMessage('Sesi tidak ditemukan atau tidak valid.');
-                setDataLoading(false);
-                return;
-            }
+    const initializePage = async () => {
+        setDataLoading(true);
+        const lockKey = `absenin_attended_${id}`;
 
-            const sessionState: AttendanceSession = {
-                id: sessionData.id,
-                date: sessionData.date,
-                division: sessionData.division,
-                shiftTime: sessionData.shift_time,
-                shiftId: sessionData.shift_id,
-                planMpp: sessionData.plan_mpp,
-                status: sessionData.status,
-                session_type: sessionData.session_type,
-                auto_close: sessionData.auto_close,
-                records: []
-            };
-            setSession(sessionState);
-            if (sessionData.status === 'CLOSED') {
-                setStatus('closed');
-                setDataLoading(false);
-                return;
-            }
-            
-            const { data: workerData, error: workerError } = await supabase
-                .from('workers')
-                .select('id, ops_id, full_name, department, status')
-                .eq('status', 'Active');
-
-            if (workerError) {
-                console.error("Worker fetch error:", workerError);
-                setStatus('error');
-                setMessage('Gagal memuat daftar karyawan. (Error: DB)');
-                setDataLoading(false);
-                return;
-            }
-            
-            if (!workerData || workerData.length === 0) {
-                setStatus('error');
-                setMessage('Tidak dapat mengambil daftar karyawan. Harap hubungi admin untuk memeriksa konfigurasi.');
-                setDataLoading(false);
-                return;
-            }
-
-            const typedWorkers: Worker[] = workerData.map((w: any) => ({
-                id: w.id,
-                opsId: w.ops_id,
-                fullName: w.full_name,
-                department: w.department,
-                status: w.status,
-                nik: '', phone: '', contractType: 'Daily Worker Vendor', createdAt: '',
-            }));
-            setWorkers(typedWorkers);
+        // 1. Check DB for session status first. This is the ultimate source of truth.
+        const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
+        
+        if (sessionError || !sessionData) {
+            setStatus('error');
+            setMessage('Sesi tidak ditemukan atau tidak valid.');
             setDataLoading(false);
-        };
+            return;
+        }
 
-        fetchData();
-    }
+        // 2. If session is closed, show closed screen regardless of lock status.
+        if (sessionData.status === 'CLOSED') {
+            setStatus('closed');
+            setDataLoading(false);
+            return;
+        }
+        
+        // 3. Session is OPEN. Now check if this device has already attended.
+        if (localStorage.getItem(lockKey)) {
+            setStatus('locked');
+            setDataLoading(false);
+            return;
+        }
+        
+        // 4. Session is OPEN and device is NOT locked. Proceed to fetch worker data for attendance form.
+        const sessionState: AttendanceSession = {
+            id: sessionData.id,
+            date: sessionData.date,
+            division: sessionData.division,
+            shiftTime: sessionData.shift_time,
+            shiftId: sessionData.shift_id,
+            planMpp: sessionData.plan_mpp,
+            status: sessionData.status,
+            session_type: sessionData.session_type,
+            auto_close: sessionData.auto_close,
+            records: []
+        };
+        setSession(sessionState);
+        
+        const { data: workerData, error: workerError } = await supabase
+            .from('workers')
+            .select('id, ops_id, full_name, department, status')
+            .eq('status', 'Active');
+
+        if (workerError) {
+            console.error("Worker fetch error:", workerError);
+            setStatus('error');
+            setMessage('Gagal memuat daftar karyawan. (Error: DB)');
+            setDataLoading(false);
+            return;
+        }
+        
+        if (!workerData || workerData.length === 0) {
+            setStatus('error');
+            setMessage('Tidak dapat mengambil daftar karyawan. Harap hubungi admin untuk memeriksa konfigurasi.');
+            setDataLoading(false);
+            return;
+        }
+
+        const typedWorkers: Worker[] = workerData.map((w: any) => ({
+            id: w.id,
+            opsId: w.ops_id,
+            fullName: w.full_name,
+            department: w.department,
+            status: w.status,
+            nik: '', phone: '', contractType: 'Daily Worker Vendor', createdAt: '',
+        }));
+        setWorkers(typedWorkers);
+        setDataLoading(false);
+    };
+
+    initializePage();
 
     // Cleanup function to remove the channel subscription when the component unmounts.
     return () => {
