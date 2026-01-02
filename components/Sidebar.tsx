@@ -114,8 +114,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, isOpen, 
             
             {!isCollapsed && (
               <div className="animate-fade-in overflow-hidden">
-                <h1 className="text-lg font-bold tracking-tight whitespace-nowrap uppercase">ABSENIN</h1>
-                <p className="text-[10px] opacity-80 font-medium tracking-widest uppercase">Sistem Absensi</p>
+                <h1 className="text-xl font-bold tracking-tight whitespace-nowrap uppercase">ABSENIN</h1>
               </div>
             )}
           </div>

@@ -14,6 +14,7 @@ const PublicAttendance: React.FC = () => {
   const [message, setMessage] = useState('');
   const [submittedData, setSubmittedData] = useState<{name: string, time: string} | null>(null);
   const [dataLoading, setDataLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'pending' | 'subscribed' | 'error'>('pending');
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -28,11 +29,9 @@ const PublicAttendance: React.FC = () => {
   // Main effect to handle data fetching and real-time subscription.
   // Runs only when sessionId is confirmed.
   useEffect(() => {
-    // If sessionId is not yet determined, or is invalid (empty string), do nothing.
     if (!sessionId) {
-      if (sessionId === null) return; // Still waiting for the first effect.
+      if (sessionId === null) return;
       
-      // If sessionId is an empty string (e.g., URL is /attend/), it's an error.
       setDataLoading(false);
       setStatus('error');
       setMessage('Sesi tidak ditemukan atau URL tidak valid.');
@@ -41,8 +40,6 @@ const PublicAttendance: React.FC = () => {
     
     const id = sessionId;
 
-    // --- REAL-TIME SUBSCRIPTION ---
-    // This must always be active to listen for session closure events.
     const channel = supabase.channel(`public_session_${id}`)
         .on(
             'postgres_changes',
@@ -50,18 +47,24 @@ const PublicAttendance: React.FC = () => {
             (payload) => {
                 const newSession = payload.new as any;
                 if (newSession.status === 'CLOSED') {
-                    // This is the source of truth. If the session is closed, all clients must update.
                     setStatus('closed');
                 }
             }
         )
-        .subscribe();
+        .subscribe((status, err) => {
+            if (status === 'SUBSCRIBED') {
+                setSubscriptionStatus('subscribed');
+            }
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                setSubscriptionStatus('error');
+                console.error('Real-time subscription error:', err);
+            }
+        });
 
     const initializePage = async () => {
         setDataLoading(true);
         const lockKey = `absenin_attended_${id}`;
 
-        // 1. Check DB for session status first. This is the ultimate source of truth.
         const { data: sessionData, error: sessionError } = await supabase.from('attendance_sessions').select('*').eq('id', id).maybeSingle();
         
         if (sessionError || !sessionData) {
@@ -71,21 +74,18 @@ const PublicAttendance: React.FC = () => {
             return;
         }
 
-        // 2. If session is closed, show closed screen regardless of lock status.
         if (sessionData.status === 'CLOSED') {
             setStatus('closed');
             setDataLoading(false);
             return;
         }
         
-        // 3. Session is OPEN. Now check if this device has already attended.
         if (localStorage.getItem(lockKey)) {
             setStatus('locked');
             setDataLoading(false);
             return;
         }
         
-        // 4. Session is OPEN and device is NOT locked. Proceed to fetch worker data for attendance form.
         const sessionState: AttendanceSession = {
             id: sessionData.id,
             date: sessionData.date,
@@ -134,7 +134,6 @@ const PublicAttendance: React.FC = () => {
 
     initializePage();
 
-    // Cleanup function to remove the channel subscription when the component unmounts.
     return () => {
         supabase.removeChannel(channel);
     };
@@ -178,12 +177,10 @@ const PublicAttendance: React.FC = () => {
         const workerOpsIdLower = w.opsId.trim().toLowerCase();
         const workerFullNameLower = w.fullName.trim().toLowerCase();
         
-        // 1. Check for exact case-insensitive match on OpsID or full name
         if (workerOpsIdLower === trimmedInput || workerFullNameLower === trimmedInput) {
             return true;
         }
 
-        // 2. Allow matching just the numeric part of the OpsID
         if (/^\d+$/.test(trimmedInput)) {
             const numericPartOfWorkerOpsId = workerOpsIdLower.replace(/[^0-9]/g, '');
             if (numericPartOfWorkerOpsId === trimmedInput) {
@@ -267,6 +264,37 @@ const PublicAttendance: React.FC = () => {
           setStatus(resultStatus);
       }
   };
+  
+  const SubscriptionStatusIndicator: React.FC = () => {
+    let content;
+    switch (subscriptionStatus) {
+        case 'subscribed':
+            content = (
+                <div className="flex items-center justify-center gap-2 text-green-600">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span>Koneksi Real-time Aktif</span>
+                </div>
+            );
+            break;
+        case 'error':
+            content = (
+                <div className="flex items-center justify-center gap-2 text-red-600">
+                    <div className="w-2 h-2 rounded-full bg-red-500"></div>
+                    <span>Koneksi Real-time Gagal. Refresh halaman.</span>
+                </div>
+            );
+            break;
+        default: // pending
+            content = (
+                <div className="flex items-center justify-center gap-2 text-yellow-600 animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-yellow-500"></div>
+                    <span>Menyambungkan ke layanan real-time...</span>
+                </div>
+            );
+    }
+    return <div className="text-[10px] font-black uppercase tracking-[0.2em]">{content}</div>;
+  };
+
 
   if (status === 'closed') {
       return (
@@ -389,8 +417,11 @@ const PublicAttendance: React.FC = () => {
                   </button>
               </form>
           </div>
-          <div className="bg-gray-50 p-5 text-center text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] rounded-b-2xl border-t border-gray-100">
-              1 Perangkat = 1 Absensi
+          <div className="bg-gray-50 p-4 text-center rounded-b-2xl border-t border-gray-100 space-y-2">
+              <SubscriptionStatusIndicator />
+              <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">
+                  1 Perangkat = 1 Absensi
+              </p>
           </div>
       </div>
       <style>{`
