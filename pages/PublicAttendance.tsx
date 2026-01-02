@@ -16,19 +16,30 @@ const PublicAttendance: React.FC = () => {
   const [dataLoading, setDataLoading] = useState(true);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
+  // Effect to get sessionId from URL, runs only once.
   useEffect(() => {
     const path = window.location.pathname;
     const parts = path.split('/');
-    const id = parts[parts.length - 1];
+    const id = parts[parts.length - 1] || null;
     setSessionId(id);
-    
-    if (!id) {
-        setDataLoading(false);
-        setStatus('error');
-        setMessage('Sesi tidak ditemukan atau URL tidak valid.');
-        return;
+  }, []);
+  
+  // Main effect to handle data fetching and real-time subscription.
+  // Runs only when sessionId is confirmed.
+  useEffect(() => {
+    // If sessionId is not yet determined, or is invalid (empty string), do nothing.
+    if (!sessionId) {
+      if (sessionId === null) return; // Still waiting for the first effect.
+      
+      // If sessionId is an empty string (e.g., URL is /attend/), it's an error.
+      setDataLoading(false);
+      setStatus('error');
+      setMessage('Sesi tidak ditemukan atau URL tidak valid.');
+      return;
     }
+    
+    const id = sessionId;
 
     // --- REAL-TIME SUBSCRIPTION ---
     // This must always be active to listen for session closure events.
