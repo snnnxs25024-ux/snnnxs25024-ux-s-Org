@@ -202,7 +202,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer' | 'On Plan'>('On Plan');
     const [manualAddError, setManualAddError] = useState<string | null>(null);
     const [isDetailReportModalOpen, setIsDetailReportModalOpen] = useState(false);
-    const [detailReportData, setDetailReportData] = useState<{ workerName: string; opsId: string; period: string; dates: { date: string; shiftTime: string; division: string }[], total: number } | null>(null);
+    const [detailReportData, setDetailReportData] = useState<{ workerName: string; opsId: string; period: string; dates: { date: string; shiftTime: string; division: string; isTakeout: boolean }[], total: number } | null>(null);
     const [isEditingSession, setIsEditingSession] = useState(false);
     const [isCopyDropdownOpen, setIsCopyDropdownOpen] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState<'ops' | 'excel' | null>(null);
@@ -337,7 +337,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             });
     }, [attendanceHistory]);
 
-    const downloadReport = (format: 'xlsx' | 'pdf') => {
+    const downloadReport = async (format: 'xlsx' | 'pdf') => {
         const reportData = currentMonthHistory.flatMap(session => 
             session.records.map(record => ({
                 'Tanggal': session.date,
@@ -352,22 +352,156 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 'Total Jam Kerja': calculateWorkDuration(record.timestamp, record.checkout_timestamp),
                 'Status': record.is_takeout ? 'Take Out' : record.manual_status || 'On Plan',
                 'Kehadiran Fisik': record.is_arrived ? 'Hadir' : 'Sedang di jalan',
-                'Tipe Sesi': session.session_type || 'MANUAL'
             }))
         );
 
         if (format === 'xlsx') {
-            const worksheet = XLSX.utils.json_to_sheet(reportData);
             const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendance Report');
-            XLSX.writeFile(workbook, 'Absensi_Report_Bulan_Ini.xlsx');
-        } else {
-            const doc = new jsPDF();
-            autoTable(doc, {
-                head: [['Tanggal', 'Divisi', 'Shift Jam', 'Shift ID', 'Ops ID', 'Nama Lengkap', 'Jam Masuk (Shift)', 'Jam Scan (Aktual)', 'Jam Pulang', 'Total Jam Kerja', 'Status']],
-                body: reportData.map(Object.values),
+
+            // Sheet 1: Executive Summary
+            const divSummary: any[] = [];
+            const divisions = Array.from(new Set(currentMonthHistory.map(s => s.division)));
+            divisions.forEach(div => {
+                const divSessions = currentMonthHistory.filter(s => s.division === div);
+                const totalPlan = divSessions.reduce((sum, s) => sum + s.planMpp, 0);
+                const totalActual = divSessions.reduce((sum, s) => sum + s.records.filter(r => r.is_arrived && !r.is_takeout).length, 0);
+                const gap = totalActual - totalPlan;
+                const fulfillment = totalPlan > 0 ? ((totalActual / totalPlan) * 100).toFixed(1) + '%' : '0%';
+                
+                divSummary.push({
+                    'Divisi': div,
+                    'Total Sesi': divSessions.length,
+                    'Total Plan MPP': totalPlan,
+                    'Total Actual Hadir': totalActual,
+                    'Gap': gap,
+                    '% Fulfillment': fulfillment
+                });
             });
-            doc.save('Absensi_Report_Bulan_Ini.pdf');
+            const wsSummary = XLSX.utils.json_to_sheet(divSummary);
+            XLSX.utils.book_append_sheet(workbook, wsSummary, 'Ringkasan Divisi');
+
+            // Sheet 2: Raw Data
+            const wsRaw = XLSX.utils.json_to_sheet(reportData);
+            XLSX.utils.book_append_sheet(workbook, wsRaw, 'Detail Kehadiran');
+
+            // Sheet 3: Gap Analysis (Only sessions with gap)
+            const gapAnalysis = currentMonthHistory
+                .filter(s => s.records.filter(r => r.is_arrived && !r.is_takeout).length < s.planMpp)
+                .map(s => ({
+                    'Tanggal': s.date,
+                    'Divisi': s.division,
+                    'Shift': s.shiftTime,
+                    'Plan': s.planMpp,
+                    'Actual': s.records.filter(r => r.is_arrived && !r.is_takeout).length,
+                    'Gap': s.records.filter(r => r.is_arrived && !r.is_takeout).length - s.planMpp
+                }));
+            const wsGap = XLSX.utils.json_to_sheet(gapAnalysis);
+            XLSX.utils.book_append_sheet(workbook, wsGap, 'Analisis Kekurangan');
+
+            // NEW Sheet 4: Rekapan Per Karyawan (Pivot)
+            const workerAttendance: { [opsId: string]: { opsId: string, fullName: string, hk: number } } = {};
+            currentMonthHistory.forEach(session => {
+                session.records.forEach(record => {
+                    if (record.is_arrived && !record.is_takeout) {
+                        if (!workerAttendance[record.opsId]) {
+                            workerAttendance[record.opsId] = {
+                                opsId: record.opsId,
+                                fullName: record.fullName,
+                                hk: 0
+                            };
+                        }
+                        workerAttendance[record.opsId].hk += 1;
+                    }
+                });
+            });
+
+            const pivotData = Object.values(workerAttendance)
+                .sort((a, b) => b.hk - a.hk)
+                .map(item => ({
+                    'OpsID': item.opsId,
+                    'Nama Lengkap': item.fullName,
+                    'HK': item.hk
+                }));
+
+            const wsPivot = XLSX.utils.json_to_sheet(pivotData);
+            XLSX.utils.book_append_sheet(workbook, wsPivot, 'Rekapan Per Karyawan');
+
+            // Auto-width adjustment helper
+            [wsSummary, wsRaw, wsGap, wsPivot].forEach(ws => {
+                const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+                const cols = [];
+                for (let i = 0; i <= range.e.c; i++) cols.push({ wch: 20 });
+                ws['!cols'] = cols;
+            });
+
+            XLSX.writeFile(workbook, `Laporan_Absensi_Nexus_Sunter_${new Date().toLocaleDateString('id-ID')}.xlsx`);
+            showToast('Laporan Excel berhasil diunduh.', { type: 'success' });
+
+        } else {
+            const doc = new jsPDF({ orientation: 'landscape' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const logoUrl = 'https://i.imgur.com/lie9EMX.png';
+
+            // Function to add logo and header
+            const addHeader = (data: any) => {
+                doc.addImage(logoUrl, 'PNG', 14, 10, 20, 20);
+                doc.setFontSize(18);
+                doc.setTextColor(30, 58, 138); // Dark Blue
+                doc.text('LAPORAN KEHADIRAN PERSONIL', 40, 20);
+                doc.setFontSize(12);
+                doc.setTextColor(100);
+                doc.text('Nexus Sunter DC | ' + new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }), 40, 27);
+                
+                // Watermark
+                doc.setGState(new (doc as any).GState({ opacity: 0.05 }));
+                doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 50, doc.internal.pageSize.getHeight() / 2 - 50, 100, 100);
+                doc.setGState(new (doc as any).GState({ opacity: 1 }));
+            };
+
+            autoTable(doc, {
+                head: [['Tanggal', 'Divisi', 'Shift', 'Ops ID', 'Nama Lengkap', 'Scan In', 'Out', 'Durasi', 'Status']],
+                body: reportData.map(r => [
+                    r['Tanggal'], r['Divisi'], r['Shift Jam'], r['Ops ID'], r['Nama Lengkap'], 
+                    r['Jam Scan (Aktual)'], r['Jam Pulang'], r['Total Jam Kerja'], r['Status']
+                ]),
+                startY: 35,
+                theme: 'striped',
+                headStyles: { fillColor: [30, 58, 138], fontSize: 9 },
+                bodyStyles: { fontSize: 8 },
+                didDrawPage: addHeader,
+                margin: { top: 35, bottom: 40 }
+            });
+
+            // Add Signatures on the last page
+            const finalY = (doc as any).lastAutoTable.finalY + 20;
+            const currentHeight = doc.internal.pageSize.getHeight();
+            
+            // Check if there is enough space, else add page
+            let sigY = finalY;
+            if (sigY > currentHeight - 50) {
+                doc.addPage();
+                sigY = 40;
+            }
+
+            doc.setFontSize(10);
+            doc.setTextColor(0);
+            const sigWidth = pageWidth / 3;
+            
+            doc.text('Dibuat Oleh,', 20, sigY);
+            doc.text('Diperiksa Oleh,', sigWidth + 20, sigY);
+            doc.text('Disetujui Oleh,', (sigWidth * 2) + 20, sigY);
+            
+            doc.text('( ________________ )', 20, sigY + 25);
+            doc.text('Admin Absensi', 20, sigY + 30);
+
+            doc.text('( ________________ )', sigWidth + 20, sigY + 25);
+            doc.text('Operations Supervisor', sigWidth + 20, sigY + 30);
+
+            doc.text('( ________________ )', (sigWidth * 2) + 20, sigY + 25);
+            doc.text('Nexus DC Manager', (sigWidth * 2) + 20, sigY + 30);
+
+            doc.save(`Laporan_Absensi_Nexus_Sunter_${new Date().getTime()}.pdf`);
+            showToast('Laporan PDF berhasil diunduh.', { type: 'success' });
         }
     };
     
@@ -1061,25 +1195,37 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         });
 
         const attendanceDetails = relevantSessions
-            // LOGIC UPDATE: Filter for Physical Presence in Report Drilldown
-            .filter(session => session.records.some(record => record.workerId === workerId && !record.is_takeout && record.is_arrived))
-            .map(session => ({
-                date: session.date,
-                shiftTime: session.shiftTime,
-                division: session.division
-            }))
-            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            .map(session => {
+                const record = session.records.find(r => r.workerId === workerId && r.is_arrived);
+                if (!record) return null;
+                return {
+                    date: session.date,
+                    shiftTime: session.shiftTime,
+                    division: session.division,
+                    isTakeout: record.is_takeout
+                };
+            })
+            .filter((item): item is { date: string; shiftTime: string; division: string; isTakeout: boolean } => item !== null)
+            .sort((a, b) => new Date(a!.date).getTime() - new Date(b!.date).getTime());
         
-        const uniqueDetails = Array.from(new Map(attendanceDetails.map(item => [`${item.date}-${item.shiftTime}-${item.division}`, item])).values());
+        // Use a more detailed key to differentiate between sessions on the same day if necessary, 
+        // and filter to ensure unique entries in the list
+        // Explicitly type the Map to fix generic inference issues
+        const uniqueDetailsMap = new Map<string, { date: string; shiftTime: string; division: string; isTakeout: boolean }>();
+        attendanceDetails.forEach(item => {
+            uniqueDetailsMap.set(`${item.date}-${item.shiftTime}-${item.division}`, item);
+        });
+        const uniqueDetails = Array.from(uniqueDetailsMap.values());
         
         const worker = workers.find(w => w.id === workerId);
+        const totalEffective = uniqueDetails.filter(d => !d.isTakeout).length;
 
         setDetailReportData({
             workerName,
             opsId: worker?.opsId || 'N/A',
             period,
             dates: uniqueDetails,
-            total: uniqueDetails.length
+            total: totalEffective
         });
         setIsDetailReportModalOpen(true);
     };
@@ -1162,17 +1308,23 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             ctx.lineTo(width - sidePadding, y + rowHeight);
             ctx.stroke();
 
-            ctx.fillStyle = '#1f2937';
+            // Handle takeout visual in JPEG
+            if (item.isTakeout) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            } else {
+                ctx.fillStyle = '#1f2937';
+            }
+            
             ctx.textAlign = 'left';
             ctx.font = 'bold 16px Arial';
             const formattedDateStr = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(item.date + 'T00:00:00'));
-            ctx.fillText(formattedDateStr, sidePadding + 20, yCenter - 5);
+            ctx.fillText(`${formattedDateStr}${item.isTakeout ? ' (TAKE OUT)' : ''}`, sidePadding + 20, yCenter - 5);
             
             ctx.font = '12px Arial';
-            ctx.fillStyle = '#4b5563';
+            ctx.fillStyle = item.isTakeout ? 'rgba(0, 0, 0, 0.3)' : '#4b5563';
             ctx.fillText(item.division, sidePadding + 20, yCenter + 15);
 
-            ctx.fillStyle = '#3b82f6';
+            ctx.fillStyle = item.isTakeout ? '#9ca3af' : '#3b82f6';
             ctx.textAlign = 'right';
             ctx.font = 'bold 16px Arial';
             ctx.fillText(item.shiftTime, width - sidePadding - 20, yCenter + 5);
@@ -1189,7 +1341,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const link = document.createElement('a');
         const safeName = detailReportData.workerName.replace(/[^a-zA-Z0-9]/g, '_');
         link.download = `Laporan_Kehadiran_${safeName}.jpeg`;
-        link.href = canvas.toDataURL('image/jpeg', 0.9);
+        link.href = canvas.toDataURL('image/png', 0.9);
         link.click();
     };
 
@@ -1720,19 +1872,24 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                         <div className="border rounded-lg bg-white shadow-sm">
                              <ul className="divide-y divide-gray-100">
                                 {detailReportData.dates.length > 0 ? (
-                                    detailReportData.dates.map((item, index) => (
-                                        <li key={index} className="p-4 flex justify-between items-center hover:bg-blue-50 transition-colors duration-150">
+                                    detailReportData.dates.map((item: { date: string; shiftTime: string; division: string; isTakeout: boolean }, index: number) => (
+                                        <li key={index} className={`p-4 flex justify-between items-center hover:bg-blue-50 transition-colors duration-150 ${item.isTakeout ? 'opacity-60 bg-gray-50' : ''}`}>
                                             <div className="flex flex-col">
-                                                <span className="font-medium text-gray-800 text-sm">
+                                                <span className={`font-medium text-sm ${item.isTakeout ? 'text-gray-500' : 'text-gray-800'}`}>
                                                     {new Intl.DateTimeFormat('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).format(new Date(item.date + 'T00:00:00'))}
                                                 </span>
-                                                <div className="mt-1">
-                                                     <span className="inline-block px-2 py-0.5 text-xs font-bold text-gray-600 bg-gray-200 rounded border border-gray-300 shadow-sm">
+                                                <div className="mt-1 flex items-center gap-2">
+                                                     <span className={`inline-block px-2 py-0.5 text-xs font-bold rounded border shadow-sm ${item.isTakeout ? 'text-gray-400 bg-gray-100 border-gray-200' : 'text-gray-600 bg-gray-200 border-gray-300'}`}>
                                                         {item.division}
                                                     </span>
+                                                    {item.isTakeout && (
+                                                        <span className="inline-block px-2 py-0.5 text-[10px] font-black uppercase tracking-widest bg-red-100 text-red-600 rounded-full border border-red-200">
+                                                            TAKE OUT
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                            <span className="text-xs font-bold text-blue-700 bg-blue-100 px-3 py-1.5 rounded-full border border-blue-200">
+                                            <span className={`text-xs font-bold px-3 py-1.5 rounded-full border ${item.isTakeout ? 'text-gray-400 bg-gray-100 border-gray-200' : 'text-blue-700 bg-blue-100 border-blue-200'}`}>
                                                 {item.shiftTime}
                                             </span>
                                         </li>
@@ -1749,7 +1906,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                             </div>
                             <button
                                 onClick={handleDownloadDetailReportJpeg}
-                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-5 rounded-lg transition-colors shadow-sm hover:shadow-md"
+                                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-bold py-2 px-4 text-sm rounded-lg transition-colors shadow-sm hover:shadow-md"
                             >
                                 <DownloadIcon /> Download JPEG
                             </button>
