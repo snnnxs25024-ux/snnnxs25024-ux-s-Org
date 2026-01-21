@@ -1405,6 +1405,14 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         }
     }, [selectedSession]);
 
+    // LOGIC: Calculate Total HK for a specific worker dynamically from entire history
+    const getWorkerTotalHK = useCallback((workerId: string) => {
+        return attendanceHistory.reduce((count, session) => {
+            const hasAttended = session.records.some(r => r.workerId === workerId && r.is_arrived && !r.is_takeout);
+            return hasAttended ? count + 1 : count;
+        }, 0);
+    }, [attendanceHistory]);
+
     return (
         <div className="space-y-6">
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
@@ -1631,6 +1639,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                         <th className="p-2 font-semibold">Kehadiran Fisik</th>
                                         <th className="p-2 font-semibold">OpsID</th>
                                         <th className="p-2 font-semibold">Nama Lengkap</th>
+                                        <th className="p-2 font-semibold text-center">Total HK</th>
                                         <th className="p-2 font-semibold">Jam Scan</th>
                                         <th className="p-2 font-semibold">Jam Shift In</th>
                                         <th className="p-2 font-semibold">Jam Shift Out</th>
@@ -1688,6 +1697,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                                 </td>
                                                 <td className="p-2 text-black font-mono font-bold">{record.opsId}</td>
                                                 <td className="p-2 text-gray-800 font-semibold">{record.fullName}</td>
+                                                <td className="p-2 text-center font-bold text-blue-600 bg-blue-50/50">{getWorkerTotalHK(record.workerId)}</td>
                                                 <td className="p-2 font-mono">{record.scan_timestamp ? new Date(record.scan_timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}</td>
                                                 <td className="p-2">{shiftInTime}</td>
                                                 <td className="p-2">{showShiftOut ? shiftOutTimeDefault : '-'}</td>
