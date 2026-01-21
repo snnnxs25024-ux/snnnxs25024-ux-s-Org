@@ -1406,12 +1406,27 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     }, [selectedSession]);
 
     // LOGIC: Calculate Total HK for a specific worker dynamically from entire history
+    // UPDATED: Now respects the period (1-15 or 16-end) of the current selected session
     const getWorkerTotalHK = useCallback((workerId: string) => {
+        if (!selectedSession) return 0;
+
+        const sessionDate = new Date(selectedSession.date + 'T00:00:00');
+        const year = sessionDate.getFullYear();
+        const month = sessionDate.getMonth();
+        const day = sessionDate.getDate();
+
+        const startDate = new Date(year, month, day <= 15 ? 1 : 16);
+        const endDate = new Date(year, month, day <= 15 ? 15 : 31, 23, 59, 59);
+
         return attendanceHistory.reduce((count, session) => {
-            const hasAttended = session.records.some(r => r.workerId === workerId && r.is_arrived && !r.is_takeout);
-            return hasAttended ? count + 1 : count;
+            const sDate = new Date(session.date + 'T00:00:00');
+            if (sDate >= startDate && sDate <= endDate) {
+                const hasAttended = session.records.some(r => r.workerId === workerId && r.is_arrived && !r.is_takeout);
+                return hasAttended ? count + 1 : count;
+            }
+            return count;
         }, 0);
-    }, [attendanceHistory]);
+    }, [attendanceHistory, selectedSession]);
 
     return (
         <div className="space-y-6">
