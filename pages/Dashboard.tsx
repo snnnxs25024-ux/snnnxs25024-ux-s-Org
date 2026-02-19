@@ -196,8 +196,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [isDeleteRecordModalOpen, setIsDeleteRecordModalOpen] = useState(false);
     const [recordToDelete, setRecordToDelete] = useState<AttendanceRecord | null>(null);
     const [loadingAction, setLoadingAction] = useState(false);
-    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
-    const [selectedReportMonth, setSelectedReportMonth] = useState<{ month: number; year: number } | null>(null);
     const [manualAddOpsId, setManualAddOpsId] = useState('');
     const [manualAddStatus, setManualAddStatus] = useState<'Partial' | 'Buffer' | 'On Plan'>('On Plan');
     const [manualAddError, setManualAddError] = useState<string | null>(null);
@@ -210,6 +208,9 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [qrWorkerData, setQrWorkerData] = useState<{ fullName: string; opsId: string; department: string } | null>(null);
     const { showToast } = useToast();
+    
+    // NEW state for viewing archived months
+    const [viewingMonth, setViewingMonth] = useState<{ month: number; year: number } | null>(null);
     
     const [manualAddSuggestions, setManualAddSuggestions] = useState<Worker[]>([]);
     const [manualAddHighlightedIndex, setManualAddHighlightedIndex] = useState(-1);
@@ -287,58 +288,69 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     }, []);
 
     const activeWorkers = workers.filter(w => w.status === 'Active').length;
+    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-    const calculateFulfillment = (startDay: number, endDay: number) => {
-        const today = new Date();
-        const relevantSessions = attendanceHistory.filter(session => {
-            // Use local time parsing
-            const sessionDate = new Date(session.date + 'T00:00:00');
-            if (isNaN(sessionDate.getTime())) return false;
-            return sessionDate.getMonth() === today.getMonth() &&
-                   sessionDate.getFullYear() === today.getFullYear() &&
-                   sessionDate.getDate() >= startDay &&
-                   sessionDate.getDate() <= endDay;
-        });
-
-        if (relevantSessions.length === 0) return '0%';
-        const totalPlanned = relevantSessions.reduce((sum, s) => sum + s.planMpp, 0);
-        // LOGIC UPDATE: Calculate Actual based on is_arrived check
-        const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout && r.is_arrived).length, 0);
-        if (totalPlanned === 0) return 'N/A';
-        const percentage = (totalActual / totalPlanned) * 100;
-        return `${percentage.toFixed(1)}%`;
-    };
-
-    const fulfillmentPeriod1 = calculateFulfillment(1, 15);
-    const fulfillmentPeriod2 = calculateFulfillment(16, 31);
+    // The reference date for all dynamic calculations (either today or the start of the viewed month)
+    const viewingDate = useMemo(() => {
+        if (!viewingMonth) return new Date();
+        return new Date(viewingMonth.year, viewingMonth.month, 1);
+    }, [viewingMonth]);
     
-    // Filter attendance history to only show current month
-    const currentMonthHistory = useMemo(() => {
-        const today = new Date();
-        const currentMonth = today.getMonth();
-        const currentYear = today.getFullYear();
+    // Dynamic calculation for fulfillment cards
+    const fulfillmentStats = useMemo(() => {
+        const year = viewingDate.getFullYear();
+        const month = viewingDate.getMonth();
+
+        const calculate = (startDay: number, endDay: number) => {
+            const relevantSessions = attendanceHistory.filter(session => {
+                const sessionDate = new Date(session.date + 'T00:00:00');
+                return sessionDate.getFullYear() === year && sessionDate.getMonth() === month &&
+                       sessionDate.getDate() >= startDay && sessionDate.getDate() <= endDay;
+            });
+            if (relevantSessions.length === 0) return '0%';
+            const totalPlanned = relevantSessions.reduce((sum, s) => sum + s.planMpp, 0);
+            const totalActual = relevantSessions.reduce((sum, s) => sum + s.records.filter(r => !r.is_takeout && r.is_arrived).length, 0);
+            if (totalPlanned === 0) return 'N/A';
+            return `${((totalActual / totalPlanned) * 100).toFixed(1)}%`;
+        };
+
+        const monthName = viewingDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+
+        return {
+            period1: calculate(1, 15),
+            period2: calculate(16, 31),
+            description: `Berdasarkan data ${monthName}`
+        };
+    }, [attendanceHistory, viewingDate]);
+    
+    // Filter attendance history based on whether we are viewing current month or an archive
+    const displayedHistory = useMemo(() => {
+        const yearToView = viewingDate.getFullYear();
+        const monthToView = viewingDate.getMonth();
 
         return attendanceHistory
             .filter(session => {
                 const sessionDate = new Date(session.date + 'T00:00:00');
-                return sessionDate.getMonth() === currentMonth && sessionDate.getFullYear() === currentYear;
+                return sessionDate.getMonth() === monthToView && sessionDate.getFullYear() === yearToView;
             })
             .sort((a, b) => {
-                // Primary sort: Date descending (newest first)
                 const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
-                if (dateComparison !== 0) {
-                    return dateComparison;
-                }
-                
-                // Secondary sort: Shift time ascending (00:00, 03:00, etc.)
+                if (dateComparison !== 0) return dateComparison;
                 const startTimeA = a.shiftTime.split(' - ')[0];
                 const startTimeB = b.shiftTime.split(' - ')[0];
                 return startTimeA.localeCompare(startTimeB);
             });
-    }, [attendanceHistory]);
+    }, [attendanceHistory, viewingDate]);
+
+    const historyTitle = useMemo(() => {
+        if (!viewingMonth) return "Attendance History (Bulan Ini)";
+        const monthName = viewingDate.toLocaleString('id-ID', { month: 'long' });
+        return `Arsip Kehadiran (${monthName} ${viewingDate.getFullYear()})`;
+    }, [viewingMonth, viewingDate]);
+
 
     const downloadReport = async (format: 'xlsx' | 'pdf') => {
-        const reportData = currentMonthHistory.flatMap(session => 
+        const reportData = displayedHistory.flatMap(session => 
             session.records.map(record => ({
                 'Tanggal': session.date,
                 'Divisi': session.division,
@@ -355,104 +367,45 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             }))
         );
 
+        const reportMonthName = viewingDate.toLocaleString('id-ID', { month: 'long' });
+        const reportYear = viewingDate.getFullYear();
+        const fileName = `Laporan_Absensi_Nexus_${reportMonthName}_${reportYear}`;
+
         if (format === 'xlsx') {
             const workbook = XLSX.utils.book_new();
-
-            // Sheet 1: Executive Summary
             const divSummary: any[] = [];
-            const divisions = Array.from(new Set(currentMonthHistory.map(s => s.division)));
+            const divisions = Array.from(new Set(displayedHistory.map(s => s.division)));
             divisions.forEach(div => {
-                const divSessions = currentMonthHistory.filter(s => s.division === div);
+                const divSessions = displayedHistory.filter(s => s.division === div);
                 const totalPlan = divSessions.reduce((sum, s) => sum + s.planMpp, 0);
                 const totalActual = divSessions.reduce((sum, s) => sum + s.records.filter(r => r.is_arrived && !r.is_takeout).length, 0);
-                const gap = totalActual - totalPlan;
-                const fulfillment = totalPlan > 0 ? ((totalActual / totalPlan) * 100).toFixed(1) + '%' : '0%';
-                
                 divSummary.push({
                     'Divisi': div,
                     'Total Sesi': divSessions.length,
                     'Total Plan MPP': totalPlan,
                     'Total Actual Hadir': totalActual,
-                    'Gap': gap,
-                    '% Fulfillment': fulfillment
+                    'Gap': totalActual - totalPlan,
+                    '% Fulfillment': totalPlan > 0 ? `${((totalActual / totalPlan) * 100).toFixed(1)}%` : '0%',
                 });
             });
-            const wsSummary = XLSX.utils.json_to_sheet(divSummary);
-            XLSX.utils.book_append_sheet(workbook, wsSummary, 'Ringkasan Divisi');
-
-            // Sheet 2: Raw Data
-            const wsRaw = XLSX.utils.json_to_sheet(reportData);
-            XLSX.utils.book_append_sheet(workbook, wsRaw, 'Detail Kehadiran');
-
-            // Sheet 3: Gap Analysis (Only sessions with gap)
-            const gapAnalysis = currentMonthHistory
-                .filter(s => s.records.filter(r => r.is_arrived && !r.is_takeout).length < s.planMpp)
-                .map(s => ({
-                    'Tanggal': s.date,
-                    'Divisi': s.division,
-                    'Shift': s.shiftTime,
-                    'Plan': s.planMpp,
-                    'Actual': s.records.filter(r => r.is_arrived && !r.is_takeout).length,
-                    'Gap': s.records.filter(r => r.is_arrived && !r.is_takeout).length - s.planMpp
-                }));
-            const wsGap = XLSX.utils.json_to_sheet(gapAnalysis);
-            XLSX.utils.book_append_sheet(workbook, wsGap, 'Analisis Kekurangan');
-
-            // NEW Sheet 4: Rekapan Per Karyawan (Pivot)
-            const workerAttendance: { [opsId: string]: { opsId: string, fullName: string, hk: number } } = {};
-            currentMonthHistory.forEach(session => {
-                session.records.forEach(record => {
-                    if (record.is_arrived && !record.is_takeout) {
-                        if (!workerAttendance[record.opsId]) {
-                            workerAttendance[record.opsId] = {
-                                opsId: record.opsId,
-                                fullName: record.fullName,
-                                hk: 0
-                            };
-                        }
-                        workerAttendance[record.opsId].hk += 1;
-                    }
-                });
-            });
-
-            const pivotData = Object.values(workerAttendance)
-                .sort((a, b) => b.hk - a.hk)
-                .map(item => ({
-                    'OpsID': item.opsId,
-                    'Nama Lengkap': item.fullName,
-                    'HK': item.hk
-                }));
-
-            const wsPivot = XLSX.utils.json_to_sheet(pivotData);
-            XLSX.utils.book_append_sheet(workbook, wsPivot, 'Rekapan Per Karyawan');
-
-            // Auto-width adjustment helper
-            [wsSummary, wsRaw, wsGap, wsPivot].forEach(ws => {
-                const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
-                const cols = [];
-                for (let i = 0; i <= range.e.c; i++) cols.push({ wch: 20 });
-                ws['!cols'] = cols;
-            });
-
-            XLSX.writeFile(workbook, `Laporan_Absensi_Nexus_Sunter_${new Date().toLocaleDateString('id-ID')}.xlsx`);
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(divSummary), 'Ringkasan Divisi');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(reportData), 'Detail Kehadiran');
+            XLSX.writeFile(workbook, `${fileName}.xlsx`);
             showToast('Laporan Excel berhasil diunduh.', { type: 'success' });
 
         } else {
             const doc = new jsPDF({ orientation: 'landscape' });
             const pageWidth = doc.internal.pageSize.getWidth();
             const logoUrl = 'https://i.imgur.com/lie9EMX.png';
-
-            // Function to add logo and header
-            const addHeader = (data: any) => {
+            
+            const addHeader = () => {
                 doc.addImage(logoUrl, 'PNG', 14, 10, 20, 20);
                 doc.setFontSize(18);
-                doc.setTextColor(30, 58, 138); // Dark Blue
+                doc.setTextColor(30, 58, 138);
                 doc.text('LAPORAN KEHADIRAN PERSONIL', 40, 20);
                 doc.setFontSize(12);
                 doc.setTextColor(100);
-                doc.text('Nexus Sunter DC | ' + new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }), 40, 27);
-                
-                // Watermark
+                doc.text(`Nexus Sunter DC | ${reportMonthName} ${reportYear}`, 40, 27);
                 doc.setGState(new (doc as any).GState({ opacity: 0.05 }));
                 doc.addImage(logoUrl, 'PNG', pageWidth / 2 - 50, doc.internal.pageSize.getHeight() / 2 - 50, 100, 100);
                 doc.setGState(new (doc as any).GState({ opacity: 1 }));
@@ -460,79 +413,21 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
             autoTable(doc, {
                 head: [['Tanggal', 'Divisi', 'Shift', 'Ops ID', 'Nama Lengkap', 'Scan In', 'Out', 'Durasi', 'Status']],
-                body: reportData.map(r => [
-                    r['Tanggal'], r['Divisi'], r['Shift Jam'], r['Ops ID'], r['Nama Lengkap'], 
-                    r['Jam Scan (Aktual)'], r['Jam Pulang'], r['Total Jam Kerja'], r['Status']
-                ]),
-                startY: 35,
-                theme: 'striped',
-                headStyles: { fillColor: [30, 58, 138], fontSize: 9 },
-                bodyStyles: { fontSize: 8 },
-                didDrawPage: addHeader,
-                margin: { top: 35, bottom: 40 }
+                body: reportData.map(r => [r['Tanggal'], r['Divisi'], r['Shift Jam'], r['Ops ID'], r['Nama Lengkap'], r['Jam Scan (Aktual)'], r['Jam Pulang'], r['Total Jam Kerja'], r['Status']]),
+                startY: 35, theme: 'striped', headStyles: { fillColor: [30, 58, 138], fontSize: 9 }, bodyStyles: { fontSize: 8 }, didDrawPage: addHeader, margin: { top: 35 }
             });
 
-            // Add Signatures on the last page
-            const finalY = (doc as any).lastAutoTable.finalY + 20;
-            const currentHeight = doc.internal.pageSize.getHeight();
-            
-            // Check if there is enough space, else add page
-            let sigY = finalY;
-            if (sigY > currentHeight - 50) {
-                doc.addPage();
-                sigY = 40;
-            }
-
-            doc.setFontSize(10);
-            doc.setTextColor(0);
-            const sigWidth = pageWidth / 3;
-            
-            doc.text('Dibuat Oleh,', 20, sigY);
-            doc.text('Diperiksa Oleh,', sigWidth + 20, sigY);
-            doc.text('Disetujui Oleh,', (sigWidth * 2) + 20, sigY);
-            
-            doc.text('( ________________ )', 20, sigY + 25);
-            doc.text('Admin Absensi', 20, sigY + 30);
-
-            doc.text('( ________________ )', sigWidth + 20, sigY + 25);
-            doc.text('Operations Supervisor', sigWidth + 20, sigY + 30);
-
-            doc.text('( ________________ )', (sigWidth * 2) + 20, sigY + 25);
-            doc.text('Nexus DC Manager', (sigWidth * 2) + 20, sigY + 30);
-
-            doc.save(`Laporan_Absensi_Nexus_Sunter_${new Date().getTime()}.pdf`);
+            doc.save(`${fileName}.pdf`);
             showToast('Laporan PDF berhasil diunduh.', { type: 'success' });
         }
     };
     
+    // Dynamic calculation for summary cards
     const summaryCounts = useMemo(() => {
-        const today_local = new Date();
+        const year = viewingDate.getFullYear();
+        const month = viewingDate.getMonth();
         
-        // Fix for timezone issue: create YYYY-MM-DD string from local date components
-        const year = today_local.getFullYear();
-        const month = (today_local.getMonth() + 1).toString().padStart(2, '0');
-        const day = today_local.getDate().toString().padStart(2, '0');
-        const todayString = `${year}-${month}-${day}`;
-
-        const currentYear = today_local.getFullYear();
-        const currentMonth = today_local.getMonth();
-
-        const startOfWeek = new Date(today_local);
-        startOfWeek.setDate(startOfWeek.getDate() - today_local.getDay() + (today_local.getDay() === 0 ? -6 : 1));
-        startOfWeek.setHours(0, 0, 0, 0);
-
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-
-        // Initial Stats Structure
-        const counts: { 
-            today: SummaryStats, 
-            thisWeek: SummaryStats, 
-            thisMonth: SummaryStats, 
-            period1: SummaryStats, 
-            period2: SummaryStats 
-        } = { 
+        const counts = { 
             today: { plan: 0, actual: 0, gap: 0 }, 
             thisWeek: { plan: 0, actual: 0, gap: 0 }, 
             thisMonth: { plan: 0, actual: 0, gap: 0 }, 
@@ -546,41 +441,36 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         };
 
         attendanceHistory.forEach(session => {
-            const sessionDate = new Date(session.date + 'T00:00:00'); 
-            if (isNaN(sessionDate.getTime())) return;
-            
+            const sessionDate = new Date(session.date + 'T00:00:00');
             const planned = session.planMpp || 0;
-            // LOGIC UPDATE: Actual only counts physical presence (is_arrived)
             const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
 
-            if (session.date === todayString) {
-                addToStats('today', planned, actual);
-            }
+            // Real-time stats are only calculated when not viewing an archive
+            if (!viewingMonth) {
+                const today_local = new Date();
+                const todayString = `${today_local.getFullYear()}-${(today_local.getMonth() + 1).toString().padStart(2, '0')}-${today_local.getDate().toString().padStart(2, '0')}`;
+                const startOfWeek = new Date(today_local);
+                startOfWeek.setDate(startOfWeek.getDate() - today_local.getDay() + (today_local.getDay() === 0 ? -6 : 1));
+                startOfWeek.setHours(0, 0, 0, 0);
 
-            if (sessionDate >= startOfWeek && sessionDate <= endOfWeek) {
-                 addToStats('thisWeek', planned, actual);
+                if (session.date === todayString) addToStats('today', planned, actual);
+                if (sessionDate >= startOfWeek) addToStats('thisWeek', planned, actual);
             }
-
-            if (sessionDate.getFullYear() === currentYear && sessionDate.getMonth() === currentMonth) {
-                 addToStats('thisMonth', planned, actual);
-                const dayOfMonth = sessionDate.getDate();
-                if (dayOfMonth <= 15) {
-                     addToStats('period1', planned, actual);
-                } else {
-                     addToStats('period2', planned, actual);
-                }
+            
+            // Monthly stats are always calculated based on the reference viewingDate
+            if (sessionDate.getFullYear() === year && sessionDate.getMonth() === month) {
+                addToStats('thisMonth', planned, actual);
+                if (sessionDate.getDate() <= 15) addToStats('period1', planned, actual);
+                else addToStats('period2', planned, actual);
             }
         });
-
-        // Calculate Gap Final (Actual - Plan)
+        
         Object.keys(counts).forEach(k => {
             const key = k as keyof typeof counts;
             counts[key].gap = counts[key].actual - counts[key].plan;
         });
-
         return counts;
-    }, [attendanceHistory]);
-
+    }, [attendanceHistory, viewingDate, viewingMonth]);
 
     const formattedDate = new Intl.DateTimeFormat('id-ID', {
         weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -863,164 +753,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         }
     };
     
-    const openQrModal = (record: AttendanceRecord) => {
-        const worker = workers.find(w => w.id === record.workerId);
-        const department = worker ? worker.department : '-';
-        
-        setQrWorkerData({
-            fullName: record.fullName,
-            opsId: record.opsId,
-            department: department
-        });
-        setQrCodeUrl('');
-        setIsQrModalOpen(true);
-
-        const generateQrWithLogo = async (opsId: string) => {
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = 300;
-                canvas.height = 300;
-    
-                await QRCode.toCanvas(canvas, opsId, {
-                    width: 300,
-                    margin: 2,
-                    errorCorrectionLevel: 'H'
-                });
-    
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    setQrCodeUrl(canvas.toDataURL());
-                    return;
-                };
-    
-                const logo = new Image();
-                logo.crossOrigin = 'Anonymous';
-                logo.src = 'https://i.imgur.com/lie9EMX.png';
-    
-                logo.onload = () => {
-                    const logoSize = canvas.width * 0.25;
-                    const logoX = (canvas.width - logoSize) / 2;
-                    const logoY = (canvas.height - logoSize) / 2;
-                    
-                    ctx.fillStyle = 'white';
-                    ctx.beginPath();
-                    // Use roundRect if available, otherwise fallback to rect
-                    if (ctx.roundRect) {
-                      ctx.roundRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10, 8);
-                    } else {
-                      ctx.rect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
-                    }
-                    ctx.fill();
-                    
-                    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-                    setQrCodeUrl(canvas.toDataURL('image/png'));
-                };
-    
-                logo.onerror = () => {
-                    console.error("Logo could not be loaded.");
-                    setQrCodeUrl(canvas.toDataURL('image/png'));
-                };
-            } catch (err) {
-                console.error("Error generating QR", err);
-            }
-        };
-    
-        if (record.opsId) {
-            generateQrWithLogo(record.opsId);
-        }
-    };
-
-    const handlePrintQr = () => {
-        window.print();
-    };
-
-    const handleDownloadQrReceipt = async () => {
-        if (!qrCodeUrl || !qrWorkerData) return;
-    
-        const scale = 2; // For higher resolution
-        const canvas = document.createElement('canvas');
-        const width = 400;
-        const height = 550;
-        canvas.width = width * scale;
-        canvas.height = height * scale;
-        const ctx = canvas.getContext('2d');
-    
-        if (!ctx) {
-            showToast('Gagal membuat gambar.', { type: 'error', title: 'Error' });
-            return;
-        }
-        ctx.scale(scale, scale);
-    
-        const loadImage = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
-            const img = new Image();
-            img.crossOrigin = 'Anonymous';
-            img.onload = () => resolve(img);
-            img.onerror = reject;
-            img.src = src;
-        });
-    
-        try {
-            const [topLogoImg, qrImg] = await Promise.all([
-                loadImage('https://i.imgur.com/lie9EMX.png'), // Main branding logo
-                loadImage(qrCodeUrl) // The generated QR code with embedded logo
-            ]);
-    
-            // --- Drawing a professional ID card ---
-            // 1. Card Background & Border
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, width, height);
-            ctx.strokeStyle = '#e5e7eb'; // light gray border
-            ctx.lineWidth = 1;
-            ctx.strokeRect(0, 0, width, height);
-    
-            // 2. Top Branding Logo
-            const topLogoHeight = 35;
-            const topLogoWidth = topLogoHeight * (topLogoImg.width / topLogoImg.height);
-            ctx.drawImage(topLogoImg, (width - topLogoWidth) / 2, 40, topLogoWidth, topLogoHeight);
-    
-            // 3. QR Code
-            const qrSize = 220;
-            ctx.drawImage(qrImg, (width - qrSize) / 2, 95, qrSize, qrSize);
-    
-            // 4. Separator Line
-            ctx.beginPath();
-            ctx.moveTo(40, 345);
-            ctx.lineTo(width - 40, 345);
-            ctx.strokeStyle = '#f1f5f9'; // very light gray
-            ctx.lineWidth = 3;
-            ctx.stroke();
-    
-            // 5. Text information
-            ctx.textAlign = 'center';
-    
-            // Full Name (Bold and large)
-            ctx.font = `900 32px 'Inter', sans-serif`;
-            ctx.fillStyle = '#111827';
-            ctx.fillText(qrWorkerData.fullName, width / 2, 395);
-    
-            // Ops ID (Medium, gray)
-            ctx.font = `500 18px 'Inter', sans-serif`;
-            ctx.fillStyle = '#6b7280';
-            ctx.fillText(qrWorkerData.opsId, width / 2, 430);
-    
-            // Department (Lighter gray)
-            ctx.font = `500 16px 'Inter', sans-serif`;
-            ctx.fillStyle = '#9ca3af';
-            ctx.fillText(qrWorkerData.department, width / 2, 460);
-    
-            // --- Trigger Download ---
-            const link = document.createElement('a');
-            const safeName = qrWorkerData.fullName.replace(/[^a-zA-Z0-9]/g, '_');
-            link.download = `ID_Card_${safeName}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-    
-        } catch (error) {
-            console.error("Failed to load images for download:", error);
-            showToast('Gagal memuat gambar untuk diunduh.', { type: 'error', title: 'Error' });
-        }
-    };
-
     const handleDownloadJpeg = async () => {
         if (!selectedSession) return;
     
@@ -1156,37 +888,19 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         link.click();
     };
 
-    const currentMonthReports = useMemo(() => {
-        const today = new Date();
-        const year = today.getFullYear();
-        const month = today.getMonth();
+    const displayedMonthReports = useMemo(() => {
+        const year = viewingDate.getFullYear();
+        const month = viewingDate.getMonth();
         const period1Start = new Date(year, month, 1);
         const period1End = new Date(year, month, 15, 23, 59, 59, 999);
         const period2Start = new Date(year, month, 16);
         const period2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
         return {
-            period1: generatePeriodicReport(attendanceHistory, workers, period1Start, period1End),
-            period2: generatePeriodicReport(attendanceHistory, workers, period2Start, period2End)
+            period1: { data: generatePeriodicReport(attendanceHistory, workers, period1Start, period1End), start: period1Start, end: period1End },
+            period2: { data: generatePeriodicReport(attendanceHistory, workers, period2Start, period2End), start: period2Start, end: period2End },
+            title: `Laporan Periode (${viewingDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })})`
         };
-    }, [attendanceHistory, workers]);
-
-    const modalReportData = useMemo(() => {
-        if (!selectedReportMonth) return null;
-        const { month, year } = selectedReportMonth;
-        const modalPeriod1Start = new Date(year, month, 1);
-        const modalPeriod1End = new Date(year, month, 15, 23, 59, 59, 999);
-        const modalPeriod2Start = new Date(year, month, 16);
-        const modalPeriod2End = new Date(year, month + 1, 0, 23, 59, 59, 999);
-        return {
-            period1: generatePeriodicReport(attendanceHistory, workers, modalPeriod1Start, modalPeriod1End),
-            period2: generatePeriodicReport(attendanceHistory, workers, modalPeriod2Start, modalPeriod2End)
-        };
-    }, [selectedReportMonth, attendanceHistory, workers]);
-
-    const handleOpenReportModal = (monthIndex: number) => {
-        setSelectedReportMonth({ month: monthIndex, year: new Date().getFullYear() });
-        setIsReportModalOpen(true);
-    };
+    }, [attendanceHistory, workers, viewingDate]);
 
     const handleWorkerClickInReport = (workerId: string, workerName: string, period: string, startDate: Date, endDate: Date) => {
         const relevantSessions = attendanceHistory.filter(session => {
@@ -1208,9 +922,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             .filter((item): item is { date: string; shiftTime: string; division: string; isTakeout: boolean } => item !== null)
             .sort((a, b) => new Date(a!.date).getTime() - new Date(b!.date).getTime());
         
-        // Use a more detailed key to differentiate between sessions on the same day if necessary, 
-        // and filter to ensure unique entries in the list
-        // Explicitly type the Map to fix generic inference issues
         const uniqueDetailsMap = new Map<string, { date: string; shiftTime: string; division: string; isTakeout: boolean }>();
         attendanceDetails.forEach(item => {
             uniqueDetailsMap.set(`${item.date}-${item.shiftTime}-${item.division}`, item);
@@ -1341,12 +1052,169 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
         const link = document.createElement('a');
         const safeName = detailReportData.workerName.replace(/[^a-zA-Z0-9]/g, '_');
         link.download = `Laporan_Kehadiran_${safeName}.jpeg`;
-        link.href = canvas.toDataURL('image/png', 0.9);
+        link.href = canvas.toDataURL('image/jpeg', 0.9);
         link.click();
     };
+// FIX: Define openQrModal function to handle QR code generation and modal display.
+const openQrModal = (record: AttendanceRecord) => {
+    const worker = workers.find(w => w.id === record.workerId);
+    const department = worker ? worker.department : '-';
+    
+    setQrWorkerData({
+        fullName: record.fullName,
+        opsId: record.opsId,
+        department: department
+    });
+    setQrCodeUrl('');
+    setIsQrModalOpen(true);
 
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    const generateQrWithLogo = async (opsId: string) => {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 300;
+            canvas.height = 300;
 
+            await QRCode.toCanvas(canvas, opsId, {
+                width: 300,
+                margin: 2,
+                errorCorrectionLevel: 'H'
+            });
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+                setQrCodeUrl(canvas.toDataURL());
+                return;
+            };
+
+            const logo = new Image();
+            logo.crossOrigin = 'Anonymous';
+            logo.src = 'https://i.imgur.com/lie9EMX.png';
+
+            logo.onload = () => {
+                const logoSize = canvas.width * 0.25;
+                const logoX = (canvas.width - logoSize) / 2;
+                const logoY = (canvas.height - logoSize) / 2;
+                
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                // Use roundRect if available, otherwise fallback to rect
+                if (ctx.roundRect) {
+                  ctx.roundRect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10, 8);
+                } else {
+                  ctx.rect(logoX - 5, logoY - 5, logoSize + 10, logoSize + 10);
+                }
+                ctx.fill();
+                
+                ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                setQrCodeUrl(canvas.toDataURL('image/png'));
+            };
+
+            logo.onerror = () => {
+                console.error("Logo could not be loaded.");
+                setQrCodeUrl(canvas.toDataURL('image/png'));
+            };
+        } catch (err) {
+            console.error("Error generating QR", err);
+        }
+    };
+
+    if (record.opsId) {
+        generateQrWithLogo(record.opsId);
+    }
+};
+
+// FIX: Define handlePrintQr function to trigger printing.
+const handlePrintQr = () => {
+    window.print();
+};
+
+// FIX: Define handleDownloadQrReceipt to generate and download a QR code receipt image.
+const handleDownloadQrReceipt = async () => {
+    if (!qrCodeUrl || !qrWorkerData) return;
+
+    const scale = 2; // For higher resolution
+    const canvas = document.createElement('canvas');
+    const width = 400;
+    const height = 550;
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+        showToast('Gagal membuat gambar.', { type: 'error', title: 'Error' });
+        return;
+    }
+    ctx.scale(scale, scale);
+
+    const loadImage = (src: string): Promise<HTMLImageElement> => new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'Anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = src;
+    });
+
+    try {
+        const [topLogoImg, qrImg] = await Promise.all([
+            loadImage('https://i.imgur.com/lie9EMX.png'), // Main branding logo
+            loadImage(qrCodeUrl) // The generated QR code with embedded logo
+        ]);
+
+        // --- Drawing a professional ID card ---
+        // 1. Card Background & Border
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+        ctx.strokeStyle = '#e5e7eb'; // light gray border
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0, 0, width, height);
+
+        // 2. Top Branding Logo
+        const topLogoHeight = 35;
+        const topLogoWidth = topLogoHeight * (topLogoImg.width / topLogoImg.height);
+        ctx.drawImage(topLogoImg, (width - topLogoWidth) / 2, 40, topLogoWidth, topLogoHeight);
+
+        // 3. QR Code
+        const qrSize = 220;
+        ctx.drawImage(qrImg, (width - qrSize) / 2, 95, qrSize, qrSize);
+
+        // 4. Separator Line
+        ctx.beginPath();
+        ctx.moveTo(40, 345);
+        ctx.lineTo(width - 40, 345);
+        ctx.strokeStyle = '#f1f5f9'; // very light gray
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 5. Text information
+        ctx.textAlign = 'center';
+
+        // Full Name (Bold and large)
+        ctx.font = `900 32px 'Inter', sans-serif`;
+        ctx.fillStyle = '#111827';
+        ctx.fillText(qrWorkerData.fullName, width / 2, 395);
+
+        // Ops ID (Medium, gray)
+        ctx.font = `500 18px 'Inter', sans-serif`;
+        ctx.fillStyle = '#6b7280';
+        ctx.fillText(qrWorkerData.opsId, width / 2, 430);
+
+        // Department (Lighter gray)
+        ctx.font = `500 16px 'Inter', sans-serif`;
+        ctx.fillStyle = '#9ca3af';
+        ctx.fillText(qrWorkerData.department, width / 2, 460);
+
+        // --- Trigger Download ---
+        const link = document.createElement('a');
+        const safeName = qrWorkerData.fullName.replace(/[^a-zA-Z0-9]/g, '_');
+        link.download = `ID_Card_${safeName}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+
+    } catch (error) {
+        console.error("Failed to load images for download:", error);
+        showToast('Gagal memuat gambar untuk diunduh.', { type: 'error', title: 'Error' });
+    }
+};
     const handleCopyOpsIdsOnly = () => {
       if (!selectedSession) return;
       const opsIdsToCopy = selectedSession.records
@@ -1445,12 +1313,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
                     <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
-                    <p className="text-sm text-gray-500">{formattedDate}</p>
+                    <p className="text-sm text-gray-500">{!viewingMonth ? formattedDate : viewingDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}</p>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
-                    <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
-                    <SummaryItem label="Bulan Ini" stats={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
+                <div className={`grid ${viewingMonth ? 'grid-cols-1 md:grid-cols-3 gap-4' : 'grid-cols-2 md:grid-cols-5 gap-4'}`}>
+                    {!viewingMonth && (
+                        <>
+                           <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
+                           <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
+                        </>
+                    )}
+                    <SummaryItem label={viewingMonth ? `Total Bulan Ini` : 'Bulan Ini'} stats={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
                     <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
                     <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
                 </div>
@@ -1458,13 +1330,21 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard title="Daily Worker Active" value={activeWorkers} description="Total active workers" borderColor="border-red-500" />
-                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentPeriod1} description="Based on current month" borderColor="border-green-500" />
-                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentPeriod2} description="Based on current month" borderColor="border-yellow-500" />
+                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentStats.period1} description={fulfillmentStats.description} borderColor="border-green-500" />
+                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentStats.period2} description={fulfillmentStats.description} borderColor="border-yellow-500" />
             </div>
 
              <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-t-4 border-indigo-500 transition-shadow duration-300 hover:shadow-xl">
-                 <div className="p-4 sm:p-6">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Attendance History (Bulan Ini)</h2>
+                <div className="p-4 sm:p-6 flex flex-wrap justify-between items-center gap-3">
+                    <h2 className="text-lg font-semibold text-gray-800">{historyTitle}</h2>
+                    {viewingMonth && (
+                        <button 
+                            onClick={() => setViewingMonth(null)}
+                            className="bg-blue-100 text-blue-700 font-bold text-xs py-2 px-3 rounded-lg hover:bg-blue-200 transition-colors"
+                        >
+                            &larr; Kembali ke Bulan Ini
+                        </button>
+                    )}
                  </div>
                 <div className="max-h-[490px] overflow-auto">
                     <div className="overflow-x-auto">
@@ -1483,8 +1363,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {currentMonthHistory.length > 0 ? (
-                                    currentMonthHistory.map((session) => {
+                                {displayedHistory.length > 0 ? (
+                                    displayedHistory.map((session) => {
                                         // LOGIC UPDATE: Actual calculation based on physical presence
                                         const actual = session.records.filter(r => !r.is_takeout && r.is_arrived).length;
                                         const planned = session.planMpp;
@@ -1532,7 +1412,7 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                     })
                                 ) : (
                                     <tr>
-                                        <td colSpan={9} className="text-center p-6 text-gray-500">No attendance history found for this month.</td>
+                                        <td colSpan={9} className="text-center p-6 text-gray-500">Tidak ada data absensi untuk periode ini.</td>
                                     </tr>
                                 )}
                             </tbody>
@@ -1543,24 +1423,39 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-purple-500 transition-shadow duration-300 hover:shadow-xl">
-                    <h2 className="text-lg font-semibold text-gray-800 mb-4">Laporan Periode Bulan Ini</h2>
+                    <h2 className="text-lg font-semibold text-gray-800 mb-4">{displayedMonthReports.title}</h2>
                     <div className="flex flex-col md:flex-row gap-6">
-                       <ReportList title="Periode 1-15" data={currentMonthReports.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 1), new Date(new Date().getFullYear(), new Date().getMonth(), 15, 23, 59, 59, 999))} />
-                       <ReportList title="Periode 16-31" data={currentMonthReports.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[new Date().getMonth()]}`, new Date(new Date().getFullYear(), new Date().getMonth(), 16), new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59, 999))} />
+                       <ReportList 
+                           title="Periode 1-15" 
+                           data={displayedMonthReports.period1.data} 
+                           onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[viewingDate.getMonth()]}`, displayedMonthReports.period1.start, displayedMonthReports.period1.end)} 
+                       />
+                       <ReportList 
+                           title="Periode 16-31" 
+                           data={displayedMonthReports.period2.data} 
+                           onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[viewingDate.getMonth()]}`, displayedMonthReports.period2.start, displayedMonthReports.period2.end)} 
+                       />
                     </div>
                 </div>
                  <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 border-t-4 border-pink-500 transition-shadow duration-300 hover:shadow-xl">
                     <h2 className="text-lg font-semibold text-gray-800 mb-4">Arsip Laporan Bulanan</h2>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                        {months.map((month, index) => (
-                             <button 
-                                key={month}
-                                onClick={() => handleOpenReportModal(index)}
-                                className="bg-gray-100 hover:bg-blue-600 text-gray-700 hover:text-white font-medium py-2 px-3 rounded-lg transition-all duration-200 text-sm border border-gray-200 hover:border-blue-600"
-                             >
-                                {month}
-                             </button>
-                        ))}
+                        {months.map((month, index) => {
+                            const isViewing = viewingMonth?.month === index;
+                            return (
+                                <button 
+                                    key={month}
+                                    onClick={() => setViewingMonth({ month: index, year: new Date().getFullYear() })}
+                                    className={`font-medium py-2 px-3 rounded-lg transition-all duration-200 text-sm border ${
+                                        isViewing 
+                                        ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                                        : 'bg-gray-100 hover:bg-blue-500 text-gray-700 hover:text-white border-gray-200 hover:border-blue-500'
+                                    }`}
+                                >
+                                    {month}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             </div>
@@ -1873,15 +1768,6 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                                 {loadingAction ? 'Deleting...' : 'Delete Record'}
                             </button>
                         </div>
-                    </div>
-                )}
-            </Modal>
-            
-            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} title={`Laporan Detail Bulan ${selectedReportMonth ? months[selectedReportMonth.month] : ''}`}>
-                {modalReportData && selectedReportMonth && (
-                    <div className="flex flex-col md:flex-row gap-6">
-                        <ReportList title="Periode 1-15" data={modalReportData.period1} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 1-15 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 1), new Date(selectedReportMonth.year, selectedReportMonth.month, 15, 23, 59, 59, 999))} />
-                        <ReportList title="Periode 16-31" data={modalReportData.period2} onWorkerClick={(workerId, workerName) => handleWorkerClickInReport(workerId, workerName, `Periode 16-31 ${months[selectedReportMonth.month]}`, new Date(selectedReportMonth.year, selectedReportMonth.month, 16), new Date(selectedReportMonth.year, selectedReportMonth.month + 1, 0, 23, 59, 59, 999))} />
                     </div>
                 )}
             </Modal>
