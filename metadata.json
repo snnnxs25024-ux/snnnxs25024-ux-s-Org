@@ -1,7 +1,5 @@
 {
-  "name": "ABSENIN",
-  "description": "Aplikasi Absensi Sederhana. Efisien, Real-time, dan Terintegrasi.",
-  "requestFramePermissions": [
-    "camera"
-  ]
+  "name": "Absenin",
+  "description": "Sistem Absensi dengan fitur ekspor laporan yang ditingkatkan.",
+  "requestFramePermissions": []
 }

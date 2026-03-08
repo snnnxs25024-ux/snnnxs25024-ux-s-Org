@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx';
 import QRCode from 'qrcode';
 import { Worker, AttendanceSession, AttendanceRecord } from '../types';
 import DownloadIcon from '../components/icons/DownloadIcon';
+import CalendarIcon from '../components/icons/CalendarIcon';
 import Modal from '../components/Modal';
 import ViewIcon from '../components/icons/ViewIcon';
 import DeleteIcon from '../components/icons/DeleteIcon';
@@ -211,6 +212,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
     // NEW state for viewing archived months
     const [viewingMonth, setViewingMonth] = useState<{ month: number; year: number } | null>(null);
+    const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+    const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
     
     const [manualAddSuggestions, setManualAddSuggestions] = useState<Worker[]>([]);
     const [manualAddHighlightedIndex, setManualAddHighlightedIndex] = useState(-1);
@@ -292,9 +295,10 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
     // The reference date for all dynamic calculations (either today or the start of the viewed month)
     const viewingDate = useMemo(() => {
+        if (dateRange) return new Date(dateRange.start + 'T00:00:00');
         if (!viewingMonth) return new Date();
         return new Date(viewingMonth.year, viewingMonth.month, 1);
-    }, [viewingMonth]);
+    }, [viewingMonth, dateRange]);
     
     // Dynamic calculation for fulfillment cards
     const fulfillmentStats = useMemo(() => {
@@ -325,12 +329,16 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     
     // Filter attendance history based on whether we are viewing current month or an archive
     const displayedHistory = useMemo(() => {
-        const yearToView = viewingDate.getFullYear();
-        const monthToView = viewingDate.getMonth();
-
         return attendanceHistory
             .filter(session => {
                 const sessionDate = new Date(session.date + 'T00:00:00');
+                if (dateRange) {
+                    const start = new Date(dateRange.start + 'T00:00:00');
+                    const end = new Date(dateRange.end + 'T23:59:59');
+                    return sessionDate >= start && sessionDate <= end;
+                }
+                const yearToView = viewingDate.getFullYear();
+                const monthToView = viewingDate.getMonth();
                 return sessionDate.getMonth() === monthToView && sessionDate.getFullYear() === yearToView;
             })
             .sort((a, b) => {
@@ -343,10 +351,11 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
     }, [attendanceHistory, viewingDate]);
 
     const historyTitle = useMemo(() => {
+        if (dateRange) return `Laporan Kehadiran (${dateRange.start} s/d ${dateRange.end})`;
         if (!viewingMonth) return "Attendance History (Bulan Ini)";
         const monthName = viewingDate.toLocaleString('id-ID', { month: 'long' });
         return `Arsip Kehadiran (${monthName} ${viewingDate.getFullYear()})`;
-    }, [viewingMonth, viewingDate]);
+    }, [viewingMonth, viewingDate, dateRange]);
 
 
     const downloadReport = async (format: 'xlsx' | 'pdf') => {
@@ -373,6 +382,8 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
         if (format === 'xlsx') {
             const workbook = XLSX.utils.book_new();
+            
+            // Sheet 1: Ringkasan Kehadiran (Plan, Actual, Gap)
             const divSummary: any[] = [];
             const divisions = Array.from(new Set(displayedHistory.map(s => s.division)));
             divisions.forEach(div => {
@@ -381,15 +392,51 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
                 const totalActual = divSessions.reduce((sum, s) => sum + s.records.filter(r => r.is_arrived && !r.is_takeout).length, 0);
                 divSummary.push({
                     'Divisi': div,
-                    'Total Sesi': divSessions.length,
                     'Total Plan MPP': totalPlan,
                     'Total Actual Hadir': totalActual,
                     'Gap': totalActual - totalPlan,
                     '% Fulfillment': totalPlan > 0 ? `${((totalActual / totalPlan) * 100).toFixed(1)}%` : '0%',
                 });
             });
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(divSummary), 'Ringkasan Divisi');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(divSummary), 'Ringkasan Kehadiran');
+
+            // Sheet 2: Detail Kehadiran Lengkap
             XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(reportData), 'Detail Kehadiran');
+
+            // Sheet 3: Analisis Kekurangan (Date, Divisi, Shift, Plan, Actual, Gap)
+            const analysisData = displayedHistory.map(session => {
+                const actual = session.records.filter(r => r.is_arrived && !r.is_takeout).length;
+                const plan = session.planMpp;
+                return {
+                    'Date': session.date,
+                    'Divisi': session.division,
+                    'Shift': session.shiftTime,
+                    'Plan': plan,
+                    'Actual': actual,
+                    'Gap': actual - plan
+                };
+            });
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(analysisData), 'Analisis Kekurangan');
+
+            // Sheet 4: Rekap Per Karyawan (Pivot)
+            const workerAttendance: { [opsId: string]: { nama: string, hk: number } } = {};
+            displayedHistory.forEach(session => {
+                session.records.forEach(record => {
+                    if (record.is_arrived && !record.is_takeout) {
+                        if (!workerAttendance[record.opsId]) {
+                            workerAttendance[record.opsId] = { nama: record.fullName, hk: 0 };
+                        }
+                        workerAttendance[record.opsId].hk += 1;
+                    }
+                });
+            });
+            const pivotData = Object.entries(workerAttendance).map(([opsId, data]) => ({
+                'Ops ID': opsId,
+                'Nama Lengkap': data.nama,
+                'Total HK': data.hk
+            })).sort((a, b) => b['Total HK'] - a['Total HK']);
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pivotData), 'Rekap Per Karyawan');
+
             XLSX.writeFile(workbook, `${fileName}.xlsx`);
             showToast('Laporan Excel berhasil diunduh.', { type: 'success' });
 
@@ -458,7 +505,13 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
             }
             
             // Monthly stats are always calculated based on the reference viewingDate
-            if (sessionDate.getFullYear() === year && sessionDate.getMonth() === month) {
+            if (dateRange) {
+                const start = new Date(dateRange.start + 'T00:00:00');
+                const end = new Date(dateRange.end + 'T23:59:59');
+                if (sessionDate >= start && sessionDate <= end) {
+                    addToStats('thisMonth', planned, actual);
+                }
+            } else if (sessionDate.getFullYear() === year && sessionDate.getMonth() === month) {
                 addToStats('thisMonth', planned, actual);
                 if (sessionDate.getDate() <= 15) addToStats('period1', planned, actual);
                 else addToStats('period2', planned, actual);
@@ -1301,6 +1354,9 @@ const handleDownloadQrReceipt = async () => {
             <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
                 <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
                 <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setIsCalendarModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
+                        <CalendarIcon /> Filter Kalender
+                    </button>
                      <button onClick={() => downloadReport('xlsx')} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md">
                         <DownloadIcon /> Excel
                     </button>
@@ -1313,38 +1369,72 @@ const handleDownloadQrReceipt = async () => {
             <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-800 border-t-4 border-blue-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-2">
                     <h2 className="text-lg font-semibold text-blue-800">Ringkasan Kehadiran</h2>
-                    <p className="text-sm text-gray-500">{!viewingMonth ? formattedDate : viewingDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}</p>
+                    <p className="text-sm text-gray-500">
+                        {dateRange 
+                            ? `${dateRange.start} - ${dateRange.end}` 
+                            : (!viewingMonth ? formattedDate : viewingDate.toLocaleString('id-ID', { month: 'long', year: 'numeric' }))}
+                    </p>
                 </div>
-                <div className={`grid ${viewingMonth ? 'grid-cols-1 md:grid-cols-3 gap-4' : 'grid-cols-2 md:grid-cols-5 gap-4'}`}>
-                    {!viewingMonth && (
+                <div className={`grid ${viewingMonth || dateRange ? 'grid-cols-1 md:grid-cols-3 gap-4' : 'grid-cols-2 md:grid-cols-5 gap-4'}`}>
+                    {!viewingMonth && !dateRange && (
                         <>
                            <SummaryItem label="Hari Ini" stats={summaryCounts.today} bgColor="bg-blue-200" textColor="text-blue-800" />
                            <SummaryItem label="Minggu Ini" stats={summaryCounts.thisWeek} bgColor="bg-green-200" textColor="text-green-800" />
                         </>
                     )}
-                    <SummaryItem label={viewingMonth ? `Total Bulan Ini` : 'Bulan Ini'} stats={summaryCounts.thisMonth} bgColor="bg-indigo-200" textColor="text-indigo-800" />
-                    <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
-                    <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
+                    <SummaryItem 
+                        label={dateRange ? "Rentang Terpilih" : (viewingMonth ? `Total Bulan Ini` : 'Bulan Ini')} 
+                        stats={summaryCounts.thisMonth} 
+                        bgColor="bg-indigo-200" 
+                        textColor="text-indigo-800" 
+                    />
+                    {!dateRange && (
+                        <>
+                            <SummaryItem label="Periode 1-15" stats={summaryCounts.period1} bgColor="bg-yellow-200" textColor="text-yellow-800" />
+                            <SummaryItem label="Periode 16-31" stats={summaryCounts.period2} bgColor="bg-purple-200" textColor="text-purple-800" />
+                        </>
+                    )}
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard title="Daily Worker Active" value={activeWorkers} description="Total active workers" borderColor="border-red-500" />
-                <StatCard title="Fulfillment Periode 1-15" value={fulfillmentStats.period1} description={fulfillmentStats.description} borderColor="border-green-500" />
-                <StatCard title="Fulfillment Periode 16-31" value={fulfillmentStats.period2} description={fulfillmentStats.description} borderColor="border-yellow-500" />
+                {!dateRange ? (
+                    <>
+                        <StatCard title="Fulfillment Periode 1-15" value={fulfillmentStats.period1} description={fulfillmentStats.description} borderColor="border-green-500" />
+                        <StatCard title="Fulfillment Periode 16-31" value={fulfillmentStats.period2} description={fulfillmentStats.description} borderColor="border-yellow-500" />
+                    </>
+                ) : (
+                    <div className="md:col-span-2 bg-indigo-50 p-6 rounded-lg border-l-4 border-indigo-500 flex items-center shadow-sm">
+                        <p className="text-indigo-700 font-medium">
+                            Menampilkan data dari <span className="font-bold">{dateRange.start}</span> sampai <span className="font-bold">{dateRange.end}</span>. 
+                            Gunakan tombol "Reset Filter" di bawah untuk kembali ke data bulan ini.
+                        </p>
+                    </div>
+                )}
             </div>
 
              <div className="bg-white rounded-lg shadow-lg border border-gray-200 border-t-4 border-indigo-500 transition-shadow duration-300 hover:shadow-xl">
                 <div className="p-4 sm:p-6 flex flex-wrap justify-between items-center gap-3">
                     <h2 className="text-lg font-semibold text-gray-800">{historyTitle}</h2>
-                    {viewingMonth && (
-                        <button 
-                            onClick={() => setViewingMonth(null)}
-                            className="bg-blue-100 text-blue-700 font-bold text-xs py-2 px-3 rounded-lg hover:bg-blue-200 transition-colors"
-                        >
-                            &larr; Kembali ke Bulan Ini
-                        </button>
-                    )}
+                    <div className="flex gap-2">
+                        {dateRange && (
+                            <button 
+                                onClick={() => setDateRange(null)}
+                                className="bg-red-100 text-red-700 font-bold text-xs py-2 px-3 rounded-lg hover:bg-red-200 transition-colors"
+                            >
+                                Reset Filter
+                            </button>
+                        )}
+                        {viewingMonth && (
+                            <button 
+                                onClick={() => setViewingMonth(null)}
+                                className="bg-blue-100 text-blue-700 font-bold text-xs py-2 px-3 rounded-lg hover:bg-blue-200 transition-colors"
+                            >
+                                &larr; Kembali ke Bulan Ini
+                            </button>
+                        )}
+                    </div>
                  </div>
                 <div className="max-h-[490px] overflow-auto">
                     <div className="overflow-x-auto">
@@ -1858,6 +1948,73 @@ const handleDownloadQrReceipt = async () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            <Modal isOpen={isCalendarModalOpen} onClose={() => setIsCalendarModalOpen(false)} title="Filter Rentang Tanggal" size="md">
+                <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const start = formData.get('startDate') as string;
+                    const end = formData.get('endDate') as string;
+                    if (start && end) {
+                        setDateRange({ start, end });
+                        setViewingMonth(null);
+                        setIsCalendarModalOpen(false);
+                        showToast(`Filter diterapkan: ${start} s/d ${end}`, { type: 'success' });
+                    }
+                }} className="space-y-4 p-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tanggal Mulai</label>
+                            <input name="startDate" type="date" required className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Tanggal Selesai</label>
+                            <input name="endDate" type="date" required className="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 outline-none" />
+                        </div>
+                    </div>
+                    
+                    <div className="pt-2">
+                        <p className="text-xs font-bold text-gray-400 uppercase mb-2">Pilihan Cepat</p>
+                        <div className="flex flex-wrap gap-2">
+                            {[
+                                { label: 'Hari Ini', days: 0 },
+                                { label: 'Kemarin', days: 1, single: true },
+                                { label: '7 Hari Terakhir', days: 7 },
+                                { label: '30 Hari Terakhir', days: 30 }
+                            ].map(preset => (
+                                <button
+                                    key={preset.label}
+                                    type="button"
+                                    onClick={() => {
+                                        const end = new Date();
+                                        const start = new Date();
+                                        if (preset.single) {
+                                            start.setDate(end.getDate() - preset.days);
+                                            end.setDate(end.getDate() - preset.days);
+                                        } else {
+                                            start.setDate(end.getDate() - preset.days);
+                                        }
+                                        const startStr = start.toISOString().split('T')[0];
+                                        const endStr = end.toISOString().split('T')[0];
+                                        setDateRange({ start: startStr, end: endStr });
+                                        setViewingMonth(null);
+                                        setIsCalendarModalOpen(false);
+                                        showToast(`Filter: ${preset.label}`, { type: 'success' });
+                                    }}
+                                    className="px-3 py-1.5 bg-gray-100 hover:bg-indigo-100 text-gray-700 hover:text-indigo-700 text-xs font-bold rounded-lg transition-colors border border-gray-200"
+                                >
+                                    {preset.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end gap-3 pt-4 border-t">
+                        <button type="button" onClick={() => setIsCalendarModalOpen(false)} className="px-4 py-2 text-gray-600 font-bold">Batal</button>
+                        <button type="submit" className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md transition-all">Terapkan Filter</button>
+                    </div>
+                </form>
             </Modal>
         </div>
     );
