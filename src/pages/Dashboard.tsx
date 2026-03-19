@@ -429,23 +429,57 @@ const Dashboard: React.FC<DashboardProps> = ({ workers, attendanceHistory, refre
 
         if (format === 'xlsx') {
             const workbook = XLSX.utils.book_new();
-            const divSummary: any[] = [];
-            const divisions = Array.from(new Set(displayedHistory.map(s => s.division)));
-            divisions.forEach(div => {
-                const divSessions = displayedHistory.filter(s => s.division === div);
-                const totalPlan = divSessions.reduce((sum, s) => sum + s.planMpp, 0);
-                const totalActual = divSessions.reduce((sum, s) => sum + s.records.filter(r => r.is_arrived && !r.is_takeout).length, 0);
-                divSummary.push({
-                    'Divisi': div,
-                    'Total Sesi': divSessions.length,
-                    'Total Plan MPP': totalPlan,
-                    'Total Actual Hadir': totalActual,
-                    'Gap': totalActual - totalPlan,
-                    '% Fulfillment': totalPlan > 0 ? `${((totalActual / totalPlan) * 100).toFixed(1)}%` : '0%',
+
+            // Sheet 1: Ringkasan Kehadiran
+            const summaryData = displayedHistory.reduce((acc, session) => {
+                const actual = session.records.filter(r => r.is_arrived && !r.is_takeout).length;
+                const plan = session.planMpp;
+                const gap = actual - plan;
+                acc.push({
+                    'Tanggal': session.date,
+                    'Divisi': session.division,
+                    'Shift': session.shiftTime,
+                    'Plan': plan,
+                    'Actual': actual,
+                    'Gap': gap
                 });
-            });
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(divSummary), 'Ringkasan Divisi');
+                return acc;
+            }, [] as any[]);
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryData), 'Ringkasan Kehadiran');
+
+            // Sheet 2: Detail Kehadiran Lengkap
             XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(reportData), 'Detail Kehadiran');
+
+            // Sheet 3: Analisis Kekurangan
+            const analysisData = displayedHistory.reduce((acc, session) => {
+                const actual = session.records.filter(r => r.is_arrived && !r.is_takeout).length;
+                const plan = session.planMpp;
+                const gap = actual - plan;
+                if (gap < 0) {
+                    acc.push({
+                        'Tanggal': session.date,
+                        'Divisi': session.division,
+                        'Shift': session.shiftTime,
+                        'Plan': plan,
+                        'Actual': actual,
+                        'Gap': gap
+                    });
+                }
+                return acc;
+            }, [] as any[]);
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(analysisData), 'Analisis Kekurangan');
+
+            // Sheet 4: Pivot Rekapan Per Karyawan
+            const pivotData = workers.map(worker => {
+                const workerRecords = displayedHistory.flatMap(s => s.records).filter(r => r.workerId === worker.id && r.is_arrived && !r.is_takeout);
+                return {
+                    'Ops ID': worker.opsId,
+                    'Nama': worker.fullName,
+                    'Total Hadir': workerRecords.length
+                };
+            });
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(pivotData), 'Rekapan Karyawan');
+
             XLSX.writeFile(workbook, `${fileName}.xlsx`);
             showToast('Laporan Excel berhasil diunduh.', { type: 'success' });
 
